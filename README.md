@@ -1,17 +1,17 @@
-# pubsubr
+# pubsub
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE.md)
 
 A serverless publish-subscribe library for R interprocess communication.
 
-`pubsubr` is a literal translation of the Python library
+`pubsub` is a literal translation of the Python library
 [formix-pubsub](https://github.com/formix/pubsub). It uses the same directory
 layout and the same binary message format, so **R and Python processes on the
 same machine can publish and subscribe to each other**.
 
 ## Why Serverless?
 
-Unlike traditional pub/sub systems (Redis, RabbitMQ, ZeroMQ), **pubsubr requires no broker, no server process, and no external service**. Messages are routed through kernel FIFO named pipes and stored on the shared-memory filesystem (`/dev/shm` on Linux), making communication fast and entirely local.
+Unlike traditional pub/sub systems (Redis, RabbitMQ, ZeroMQ), **pubsub requires no broker, no server process, and no external service**. Messages are routed through kernel FIFO named pipes and stored on the shared-memory filesystem (`/dev/shm` on Linux), making communication fast and entirely local.
 
 - **No infrastructure**: install and use, nothing to start or configure
 - **Pure R**: no compiled code; FIFOs use base R `fifo()` connections. Dependencies are `R6` and `jsonlite`
@@ -36,7 +36,7 @@ from source needs a C compiler.
 **subscriber.R**
 
 ```r
-library(pubsubr)
+library(pubsub)
 
 channel <- Channel$new(topic = "greetings")
 
@@ -53,7 +53,7 @@ with_channel(channel, {
 **publisher.R**
 
 ```r
-library(pubsubr)
+library(pubsub)
 
 count <- publish("greetings", charToRaw("Hello from another process!"))
 cat(sprintf("Published to %d subscriber(s)\n", count))
@@ -72,7 +72,7 @@ Rscript publisher.R
 Use `fetch()` to poll for messages without blocking. It returns `NULL` immediately when the queue is empty.
 
 ```r
-library(pubsubr)
+library(pubsub)
 
 channel <- Channel$new(topic = "tasks")
 
@@ -96,7 +96,7 @@ with_channel(channel, {
 **rpc_server.R**
 
 ```r
-library(pubsubr)
+library(pubsub)
 
 channel <- Channel$new(topic = "rpc.math.multiply")
 
@@ -129,7 +129,7 @@ with_channel(channel, {
 **rpc_client.R**
 
 ```r
-library(pubsubr)
+library(pubsub)
 
 rpc_multiply <- function(a, b, timeout = 2.0) {
   correlation_id <- paste(sample(c(letters, 0:9), 32, replace = TRUE), collapse = "")
@@ -214,7 +214,7 @@ returning -1, when it receives:
 
 | R option | Description | Default |
 |----------|-------------|---------|
-| `pubsubr.log_level` | Minimum level of log messages (`DEBUG`, `INFO`, `WARNING`, `ERROR`) | `WARNING` |
+| `pubsub.log_level` | Minimum level of log messages (`DEBUG`, `INFO`, `WARNING`, `ERROR`) | `WARNING` |
 
 ## API Summary
 
@@ -233,7 +233,7 @@ returning -1, when it receives:
 | `with channel:` | `with_channel(channel, { ... })` |
 | `Channel.active_paths()` | `Channel$active_paths()` |
 | `ValueError`, `RuntimeError`, `TypeError`, `OSError` | conditions of class `value_error`, `runtime_error`, `type_error`, `os_error` |
-| `logging` | `message()` on stderr, filtered by the `pubsubr.log_level` option |
+| `logging` | `message()` on stderr, filtered by the `pubsub.log_level` option |
 | 64-bit integer ids | doubles, exact up to 2^53 (current microsecond timestamps are around 2^51) |
 | SIGTERM and SIGINT handled by `subscribe()` | SIGINT as an R `interrupt` condition; SIGTERM with a C handler adapted from the sigterm package |
 | threads / `multiprocessing` in tests | forked processes with `parallel::mcparallel` |

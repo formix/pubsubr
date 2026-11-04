@@ -1,4 +1,4 @@
-#' pubsubr: serverless publish-subscribe interprocess messaging
+#' pubsub: serverless publish-subscribe interprocess messaging
 #'
 #' A literal R translation of the Python `formix-pubsub` library. It provides
 #' a simple and efficient way to implement publish-subscribe patterns between

@@ -1,5 +1,5 @@
 /*
- * SIGTERM detection for pubsubr.
+ * SIGTERM detection for pubsub.
  *
  * Base R cannot catch SIGTERM: it ends the R process. This file installs a
  * SIGTERM handler that only sets a flag, which subscribe() polls to exit its
@@ -19,7 +19,7 @@
  *   - As in the Python formix-pubsub library, the previous handler is called
  *     after it is restored when a signal was received, if it is a function
  *     (SIG_DFL and SIG_IGN are not called).
- *   - Routines renamed and registered under pubsubr.
+ *   - Routines renamed and registered under pubsub.
  */
 
 #define R_NO_REMAP
@@ -40,7 +40,7 @@ static void handler(int signum)
   flag = 1;
 }
 
-SEXP pubsubr_sigterm_install(void)
+SEXP pubsub_sigterm_install(void)
 {
   struct sigaction action;
   memset(&action, 0, sizeof(action));
@@ -56,12 +56,12 @@ SEXP pubsubr_sigterm_install(void)
   return R_NilValue;
 }
 
-SEXP pubsubr_sigterm_received(void)
+SEXP pubsub_sigterm_received(void)
 {
   return Rf_ScalarLogical(flag != 0);
 }
 
-SEXP pubsubr_sigterm_restore(void)
+SEXP pubsub_sigterm_restore(void)
 {
   if (!installed) return R_NilValue;
   int received = flag != 0;
@@ -77,13 +77,13 @@ SEXP pubsubr_sigterm_restore(void)
 }
 
 static const R_CallMethodDef call_entries[] = {
-  {"C_pubsubr_sigterm_install", (DL_FUNC) &pubsubr_sigterm_install, 0},
-  {"C_pubsubr_sigterm_received", (DL_FUNC) &pubsubr_sigterm_received, 0},
-  {"C_pubsubr_sigterm_restore", (DL_FUNC) &pubsubr_sigterm_restore, 0},
+  {"C_pubsub_sigterm_install", (DL_FUNC) &pubsub_sigterm_install, 0},
+  {"C_pubsub_sigterm_received", (DL_FUNC) &pubsub_sigterm_received, 0},
+  {"C_pubsub_sigterm_restore", (DL_FUNC) &pubsub_sigterm_restore, 0},
   {NULL, NULL, 0}
 };
 
-void R_init_pubsubr(DllInfo *dll)
+void R_init_pubsub(DllInfo *dll)
 {
   R_registerRoutines(dll, NULL, call_entries, NULL, NULL);
   R_useDynamicSymbols(dll, FALSE);

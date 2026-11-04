@@ -148,7 +148,7 @@ fetch <- function(channel) {
 #'
 #' Errors have class `runtime_error` if the channel is not open for reading
 #' and `value_error` if `timeout_seconds` is negative.
-#' @useDynLib pubsubr, .registration = TRUE
+#' @useDynLib pubsub, .registration = TRUE
 #' @export
 subscribe <- function(channel, callback, timeout_seconds = 0) {
   if (timeout_seconds < 0) {
@@ -162,8 +162,8 @@ subscribe <- function(channel, callback, timeout_seconds = 0) {
   # SIGINT is delivered to R code as an "interrupt" condition, which ends the
   # loop for a graceful shutdown. SIGTERM, which base R cannot catch, sets a
   # flag in a C handler installed for the duration of the loop.
-  .Call(C_pubsubr_sigterm_install)
-  on.exit(.Call(C_pubsubr_sigterm_restore))
+  .Call(C_pubsub_sigterm_install)
+  on.exit(.Call(C_pubsub_sigterm_restore))
   shutdown_requested <- FALSE
   message_count <- 0L
   start_time <- .time_seconds()
@@ -171,7 +171,7 @@ subscribe <- function(channel, callback, timeout_seconds = 0) {
   tryCatch(
     while (!shutdown_requested &&
            (listen_forever || (.time_seconds() - start_time < timeout_seconds))) {
-      if (.Call(C_pubsubr_sigterm_received)) {
+      if (.Call(C_pubsub_sigterm_received)) {
         shutdown_requested <- TRUE
         .log("INFO", "Received termination signal, exiting subscribe loop...")
         break

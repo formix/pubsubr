@@ -1,4 +1,4 @@
-Package: pubsubr
+Package: pubsub
 Type: Package
 Title: Serverless Publish-Subscribe Interprocess Messaging
 Version: 1.0.0

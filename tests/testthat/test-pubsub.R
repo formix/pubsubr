@@ -1,7 +1,7 @@
 # Tests for the PubSub module.
 #
 # Python threads and multiprocessing.Process are replaced by forked child
-# processes (parallel::mcparallel); see helper-pubsubr.R.
+# processes (parallel::mcparallel); see helper-pubsub.R.
 
 # ------------------------------------------------------------------ publish
 
