@@ -28,13 +28,9 @@ remotes::install_github("formix/pubsubr")
 Requires **R 3.5.0 or later** (for `suspendInterrupts()`) on a Unix-like
 system (Linux, macOS).
 
-To let `subscribe()` stop gracefully on SIGTERM, also install the optional
-[sigterm](https://github.com/atheriel/sigterm) package (see
-[Signals](#signals)):
-
-```r
-remotes::install_github("atheriel/sigterm")
-```
+pubsubr depends on the [sigterm](https://github.com/atheriel/sigterm)
+package to catch SIGTERM (see [Signals](#signals)). `remotes::install_github()`
+installs it automatically from the `Remotes` field.
 
 ## Quick Start: Publish & Subscribe Across Processes
 
@@ -50,8 +46,7 @@ with_channel(channel, {
     cat("Received:", rawToChar(msg$content), "\n")
   }
 
-  # Blocks and listens until terminated with Ctrl+C (SIGINT), or SIGTERM
-  # when the sigterm package is installed
+  # Blocks and listens until terminated with Ctrl+C (SIGINT) or SIGTERM
   subscribe(channel, on_message)
 })
 ```
@@ -206,20 +201,13 @@ returning -1, when it receives:
   caught with `tryCatch(..., interrupt = function(sig) ...)`. Interrupts are
   suspended while a message is fetched and handled, with
   `suspendInterrupts()` (R >= 3.5.0).
-- **SIGTERM**, only when the [sigterm](https://github.com/atheriel/sigterm)
-  package is installed. Base R cannot catch SIGTERM, so without sigterm the
-  process ends immediately and its channel is removed later by
-  `Channel$cleanup_inactive()`. Once sigterm is loaded, R no longer exits on
-  SIGTERM: let your script end after `subscribe()` returns -1.
-
-`systemctl stop` sends SIGTERM by default. Without the sigterm package, set
-`KillSignal=SIGINT` in the unit file to get the same graceful shutdown:
-
-```ini
-[Service]
-ExecStart=/usr/bin/Rscript /path/to/subscriber.R
-KillSignal=SIGINT
-```
+- **SIGTERM**, the default signal of `systemctl stop`, `docker stop` and
+  Kubernetes. Base R cannot catch it, so pubsubr uses the
+  [sigterm](https://github.com/atheriel/sigterm) package, which installs a
+  SIGTERM handler when pubsubr is loaded; `subscribe()` polls
+  `sigterm::has_sigterm_flag()`. While pubsubr is loaded, R no longer exits on
+  SIGTERM and the flag stays set: let your script end after `subscribe()`
+  returns -1.
 
 ## Configuration
 
@@ -250,7 +238,7 @@ KillSignal=SIGINT
 | `ValueError`, `RuntimeError`, `TypeError`, `OSError` | conditions of class `value_error`, `runtime_error`, `type_error`, `os_error` |
 | `logging` | `message()` on stderr, filtered by the `pubsubr.log_level` option |
 | 64-bit integer ids | doubles, exact up to 2^53 (current microsecond timestamps are around 2^51) |
-| SIGTERM and SIGINT handled by `subscribe()` | SIGINT as an R `interrupt` condition; SIGTERM only with the optional sigterm package |
+| SIGTERM and SIGINT handled by `subscribe()` | SIGINT as an R `interrupt` condition; SIGTERM with the sigterm package |
 | threads / `multiprocessing` in tests | forked processes with `parallel::mcparallel` |
 
 ## Development

@@ -12,8 +12,8 @@ Description: A serverless publish-subscribe library for local interprocess
     and Python processes can exchange messages. Requires R >= 3.5.0 for
     suspendInterrupts(), so that an interrupt (SIGINT, caught as an
     'interrupt' condition) never stops a message half-processed. SIGTERM
-    is handled when the optional 'sigterm' package
-    (<https://github.com/atheriel/sigterm>) is installed.
+    is caught with the 'sigterm' package
+    (<https://github.com/atheriel/sigterm>), since base R cannot catch it.
 License: MIT + file LICENSE
 URL: https://github.com/formix/pubsubr, https://github.com/formix/pubsub
 BugReports: https://github.com/formix/pubsubr/issues
@@ -22,10 +22,10 @@ Depends: R (>= 3.5.0)
 Imports:
     jsonlite,
     R6,
+    sigterm,
     tools
 Suggests:
     parallel,
-    sigterm,
     testthat (>= 3.0.0),
     withr
 OS_type: unix
