@@ -1,0 +1,183 @@
+# PubSub module for publishing, fetching, and subscribing to messages.
+
+#' Publish a message to a topic
+#'
+#' @param topic The topic to publish to (only alphanumeric, dots, and hyphens
+#'   allowed).
+#' @param data The message payload as a raw vector.
+#' @param headers Optional named list with scalar values (character, numeric,
+#'   logical, `NULL`) for metadata.
+#' @return The number of times the message was published in a channel.
+#'
+#' Errors have class `value_error` if the topic contains invalid characters
+#' (must be `[a-zA-Z0-9.-]`) and `type_error` if `data` is not a raw vector.
+#' @export
+publish <- function(topic, data, headers = NULL) {
+  # Validate that topic contains only allowed characters (no wildcards)
+  if (!is.character(topic) || length(topic) != 1L || is.na(topic) ||
+      !grepl("^[a-zA-Z0-9.-]+$", topic, perl = TRUE)) {
+    .raise("value_error", sprintf(
+      paste0("Topic '%s' can only contain alphanumeric characters, dots, and hyphens ",
+             "[a-zA-Z0-9.-] when publishing"),
+      paste(topic, collapse = " ")
+    ))
+  }
+
+  message <- Message$new(topic = topic, content = data, headers = headers)
+  tmp_dir <- file.path(get_base_dir(), "tmp")
+  dir.create(tmp_dir, recursive = TRUE, showWarnings = FALSE) # Ensure temporary directory exists
+  message_temp_file <- file.path(tmp_dir, format(message$id, scientific = FALSE))
+  msg_file <- file(message_temp_file, "wb")
+  tryCatch(message$write(msg_file), finally = close(msg_file))
+
+  publication_count <- 0L
+  matching_channels <- Channel$matching_active_paths(topic)
+  for (channel_dir in matching_channels) {
+    queue_path <- file.path(channel_dir, "queue")
+    if (!file.exists(queue_path)) {
+      .log("WARNING", "Channel directory %s does not contain a queue file. Skipping.",
+           channel_dir)
+      next
+    }
+    tryCatch(
+      {
+        message_file_path <- file.path(channel_dir, format(message$id, scientific = FALSE))
+        if (!suppressWarnings(file.link(message_temp_file, message_file_path))) {
+          stop("cannot link '", message_temp_file, "' to '", message_file_path, "'")
+        }
+        queue_file <- .Call(C_pubsubr_open_nonblock, queue_path, 1L)
+        tryCatch(
+          {
+            .Call(C_pubsubr_write_fd, queue_file, .pack_u64(message$id))
+            publication_count <- publication_count + 1L
+          },
+          finally = .Call(C_pubsubr_close_fd, queue_file)
+        )
+      },
+      error = function(e) {
+        .log("WARNING", "Failed to publish message %s to %s: %s",
+             format(message$id, scientific = FALSE), queue_path, conditionMessage(e))
+      }
+    )
+  }
+
+  if (file.exists(message_temp_file)) {
+    unlink(message_temp_file)
+  } else {
+    .log("DEBUG", "Temporary message file %s already removed.", message_temp_file)
+  }
+
+  publication_count
+}
+
+#' Fetch a single message from a channel (non-blocking)
+#'
+#' Reads an 8-byte message ID from the FIFO queue, then loads the actual
+#' message from the corresponding file.
+#'
+#' @param channel The [Channel] to fetch from.
+#' @return A [Message] if one is available, `NULL` otherwise.
+#'
+#' Errors have class `runtime_error` if the channel is not open for reading,
+#' and `value_error` if the message format is invalid.
+#' @export
+fetch <- function(channel) {
+  if (!channel$is_open) {
+    .raise("runtime_error", "Channel must be open to fetch messages")
+  }
+
+  # Read message ID from queue (non-blocking)
+  id_bytes <- .Call(C_pubsubr_read_fd, channel$fd, 8L)
+  if (is.null(id_bytes)) {
+    # No data available (non-blocking read)
+    return(NULL)
+  }
+
+  if (length(id_bytes) != 8L) {
+    # No data available or incomplete ID
+    return(NULL)
+  }
+
+  id <- .unpack_uint(id_bytes)
+  message_file_path <- file.path(channel$directory_path, format(id, scientific = FALSE))
+  if (!file.exists(message_file_path)) {
+    return(NULL)
+  }
+
+  msg_file <- file(message_file_path, "rb")
+  message <- tryCatch(Message$read(msg_file), finally = close(msg_file))
+
+  unlink(message_file_path)
+
+  message
+}
+
+#' Subscribe to a channel and call a function for each received message
+#'
+#' Listens for messages for the specified duration and calls the callback
+#' function for each message received.
+#'
+#' @section Signal Handling:
+#' This function handles SIGTERM and SIGINT signals gracefully. When either
+#' signal is received:
+#' \itemize{
+#'   \item The subscription loop exits cleanly
+#'   \item Any message being processed completes normally
+#'   \item The function returns -1
+#'   \item The original signal handler (if any) is called before returning
+#' }
+#' This allows subscriber services to be terminated gracefully. In an
+#' interactive R session, R's own SIGINT handler is the original handler, so
+#' Ctrl+C still interrupts the calling code once the loop has exited, the same
+#' way Python raises `KeyboardInterrupt`.
+#'
+#' @param channel The [Channel] to subscribe to.
+#' @param callback Function to call with each received [Message].
+#' @param timeout_seconds How long to listen for messages (0 = listen
+#'   indefinitely).
+#' @return The number of messages processed after normal timeout expiration,
+#'   or -1 if exited due to a termination signal (SIGTERM/SIGINT).
+#'
+#' Errors have class `runtime_error` if the channel is not open for reading
+#' and `value_error` if `timeout_seconds` is negative.
+#' @export
+subscribe <- function(channel, callback, timeout_seconds = 0) {
+  if (timeout_seconds < 0) {
+    .raise("value_error", "timeout_seconds must be non-negative")
+  }
+
+  if (!channel$is_open) {
+    .raise("runtime_error", "Channel must be open to subscribe")
+  }
+
+  # Register SIGTERM and SIGINT handlers for graceful shutdown. The original
+  # handlers are restored, and called if a signal was received, on exit.
+  .Call(C_pubsubr_install_signal_handlers)
+  on.exit(.Call(C_pubsubr_restore_signal_handlers))
+  shutdown_requested <- function() .Call(C_pubsubr_shutdown_signal) != 0L
+
+  message_count <- 0L
+  start_time <- .time_seconds()
+  listen_forever <- timeout_seconds == 0
+  while (!shutdown_requested() &&
+         (listen_forever || (.time_seconds() - start_time < timeout_seconds))) {
+    message <- fetch(channel)
+    if (!is.null(message)) {
+      tryCatch(
+        callback(message),
+        error = function(e) {
+          .log("WARNING", "Error processing message %s: %s",
+               format(message), conditionMessage(e))
+        }
+      )
+      message_count <- message_count + 1L
+    }
+    Sys.sleep(0.01) # Sleep briefly to avoid busy waiting
+  }
+  if (shutdown_requested()) {
+    .log("INFO", "Exiting subscribe loop on '%s'. Handled %i messages.",
+         channel$topic, message_count)
+    return(-1L) # Indicate shutdown by signal
+  }
+  message_count
+}

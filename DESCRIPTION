@@ -1,0 +1,27 @@
+Package: pubsubr
+Type: Package
+Title: Serverless Publish-Subscribe Interprocess Messaging
+Version: 1.0.0
+Authors@R: person("formix", email = "formix@users.noreply.github.com",
+    role = c("aut", "cre"))
+Description: A serverless publish-subscribe library for local interprocess
+    communication. Messages are routed through kernel FIFO named pipes and
+    stored on the shared-memory filesystem ('/dev/shm' on Linux), with no
+    broker or server process. This is a literal translation of the Python
+    'formix-pubsub' library and uses the same on-disk and wire formats, so R
+    and Python processes can exchange messages.
+License: MIT + file LICENSE
+URL: https://github.com/formix/pubsubr, https://github.com/formix/pubsub
+BugReports: https://github.com/formix/pubsubr/issues
+Encoding: UTF-8
+Depends: R (>= 4.1.0)
+Imports:
+    jsonlite,
+    R6
+Suggests:
+    testthat (>= 3.0.0),
+    withr
+OS_type: unix
+NeedsCompilation: yes
+Config/testthat/edition: 3
+RoxygenNote: 7.3.2
