@@ -37,10 +37,12 @@ signal is received:
 }
 SIGINT reaches R code as a condition of class `interrupt`, caught with
 `tryCatch(..., interrupt = function(sig) ...)`. Base R cannot catch
-SIGTERM, so it is detected with `sigterm::has_sigterm_flag()` from the
-\href{https://github.com/atheriel/sigterm}{sigterm} package, loaded with
-pubsubr. While sigterm is loaded, R no longer exits on SIGTERM and the flag
-stays set: the program should exit after `subscribe()` returns -1.
+SIGTERM, so a small C handler, adapted from the
+\href{https://github.com/atheriel/sigterm}{sigterm} package, sets a flag
+that the loop polls. It is installed only while `subscribe()` runs; the
+previous SIGTERM handler is restored afterwards and, as in Python, called
+if a signal was received and it is a function (the default action, which
+terminates R, is not called).
 
 Requires R >= 3.5.0, for `suspendInterrupts()`.
 }

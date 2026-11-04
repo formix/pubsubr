@@ -28,9 +28,8 @@ remotes::install_github("formix/pubsubr")
 Requires **R 3.5.0 or later** (for `suspendInterrupts()`) on a Unix-like
 system (Linux, macOS).
 
-pubsubr depends on the [sigterm](https://github.com/atheriel/sigterm)
-package to catch SIGTERM (see [Signals](#signals)). `remotes::install_github()`
-installs it automatically from the `Remotes` field.
+The package includes a small C file (to catch SIGTERM), so installing it
+from source needs a C compiler.
 
 ## Quick Start: Publish & Subscribe Across Processes
 
@@ -202,12 +201,10 @@ returning -1, when it receives:
   suspended while a message is fetched and handled, with
   `suspendInterrupts()` (R >= 3.5.0).
 - **SIGTERM**, the default signal of `systemctl stop`, `docker stop` and
-  Kubernetes. Base R cannot catch it, so pubsubr uses the
-  [sigterm](https://github.com/atheriel/sigterm) package, which installs a
-  SIGTERM handler when pubsubr is loaded; `subscribe()` polls
-  `sigterm::has_sigterm_flag()`. While pubsubr is loaded, R no longer exits on
-  SIGTERM and the flag stays set: let your script end after `subscribe()`
-  returns -1.
+  Kubernetes. Base R cannot catch it, so a small C handler, adapted from the
+  [sigterm](https://github.com/atheriel/sigterm) package, sets a flag that
+  `subscribe()` polls. It is installed only while `subscribe()` runs, and the
+  previous handler is restored afterwards.
 
 ## Configuration
 
@@ -238,7 +235,7 @@ returning -1, when it receives:
 | `ValueError`, `RuntimeError`, `TypeError`, `OSError` | conditions of class `value_error`, `runtime_error`, `type_error`, `os_error` |
 | `logging` | `message()` on stderr, filtered by the `pubsubr.log_level` option |
 | 64-bit integer ids | doubles, exact up to 2^53 (current microsecond timestamps are around 2^51) |
-| SIGTERM and SIGINT handled by `subscribe()` | SIGINT as an R `interrupt` condition; SIGTERM with the sigterm package |
+| SIGTERM and SIGINT handled by `subscribe()` | SIGINT as an R `interrupt` condition; SIGTERM with a C handler adapted from the sigterm package |
 | threads / `multiprocessing` in tests | forked processes with `parallel::mcparallel` |
 
 ## Development
@@ -250,4 +247,7 @@ Rscript -e 'testthat::test_local()'
 
 ## License
 
-[MIT](LICENSE.md)
+[MIT](LICENSE.md), except `src/sigterm.c`, which is adapted from the
+[sigterm](https://github.com/atheriel/sigterm) package by Aaron Jacobs and
+remains under the [Apache License 2.0](inst/licenses/LICENSE-APACHE-2.0).
+See [inst/COPYRIGHTS](inst/COPYRIGHTS).

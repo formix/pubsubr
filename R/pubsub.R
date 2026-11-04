@@ -130,10 +130,12 @@ fetch <- function(channel) {
 #' }
 #' SIGINT reaches R code as a condition of class `interrupt`, caught with
 #' `tryCatch(..., interrupt = function(sig) ...)`. Base R cannot catch
-#' SIGTERM, so it is detected with `sigterm::has_sigterm_flag()` from the
-#' \href{https://github.com/atheriel/sigterm}{sigterm} package, loaded with
-#' pubsubr. While sigterm is loaded, R no longer exits on SIGTERM and the flag
-#' stays set: the program should exit after `subscribe()` returns -1.
+#' SIGTERM, so a small C handler, adapted from the
+#' \href{https://github.com/atheriel/sigterm}{sigterm} package, sets a flag
+#' that the loop polls. It is installed only while `subscribe()` runs; the
+#' previous SIGTERM handler is restored afterwards and, as in Python, called
+#' if a signal was received and it is a function (the default action, which
+#' terminates R, is not called).
 #'
 #' Requires R >= 3.5.0, for `suspendInterrupts()`.
 #'
@@ -146,7 +148,7 @@ fetch <- function(channel) {
 #'
 #' Errors have class `runtime_error` if the channel is not open for reading
 #' and `value_error` if `timeout_seconds` is negative.
-#' @importFrom sigterm has_sigterm_flag
+#' @useDynLib pubsubr, .registration = TRUE
 #' @export
 subscribe <- function(channel, callback, timeout_seconds = 0) {
   if (timeout_seconds < 0) {
@@ -158,8 +160,10 @@ subscribe <- function(channel, callback, timeout_seconds = 0) {
   }
 
   # SIGINT is delivered to R code as an "interrupt" condition, which ends the
-  # loop for a graceful shutdown. SIGTERM, which base R cannot catch, is
-  # detected with the sigterm package.
+  # loop for a graceful shutdown. SIGTERM, which base R cannot catch, sets a
+  # flag in a C handler installed for the duration of the loop.
+  .Call(C_pubsubr_sigterm_install)
+  on.exit(.Call(C_pubsubr_sigterm_restore))
   shutdown_requested <- FALSE
   message_count <- 0L
   start_time <- .time_seconds()
@@ -167,7 +171,7 @@ subscribe <- function(channel, callback, timeout_seconds = 0) {
   tryCatch(
     while (!shutdown_requested &&
            (listen_forever || (.time_seconds() - start_time < timeout_seconds))) {
-      if (isTRUE(has_sigterm_flag())) {
+      if (.Call(C_pubsubr_sigterm_received)) {
         shutdown_requested <- TRUE
         .log("INFO", "Received termination signal, exiting subscribe loop...")
         break

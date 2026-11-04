@@ -1,0 +1,26 @@
+pubsubr
+=======
+
+pubsubr is a translation of the Python library formix-pubsub
+(https://github.com/formix/pubsub).
+
+Copyright (c) 2026 formix
+Licensed under the MIT License; see the LICENSE.md file.
+
+
+Third-party code
+----------------
+
+src/sigterm.c is adapted from src/sigterm.c of the 'sigterm' R package
+(https://github.com/atheriel/sigterm, commit d742e32).
+
+Copyright (c) Aaron Jacobs
+Licensed under the Apache License, Version 2.0; a copy of the license is in
+inst/licenses/LICENSE-APACHE-2.0 (installed as licenses/LICENSE-APACHE-2.0).
+The 'sigterm' package has no NOTICE file.
+
+The changes made to that file are listed in its header comment. That file
+remains under the Apache License 2.0; the rest of pubsubr is under the MIT
+License. The two licenses are compatible: Apache-2.0 code may be included
+in a work distributed under the MIT License, provided this notice, the
+Apache license text and the list of changes are kept.
