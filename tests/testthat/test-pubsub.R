@@ -1,7 +1,7 @@
 # Tests for the PubSub module.
 #
 # Python threads and multiprocessing.Process are replaced by forked child
-# processes (parallel::mcparallel); see helper-pubsubr.R.
+# processes (parallel::mcparallel); see helper-pubsub.R.
 
 # ------------------------------------------------------------------ publish
 
@@ -406,7 +406,7 @@ test_that("subscribe on closed channel", {
 test_that("subscribe returns -1 on SIGINT", {
   # Not in the Python test suite: checks the graceful shutdown on SIGINT.
   skip_if_no_fork()
-  topic <- "test.subscribe.sigterm"
+  topic <- "test.subscribe.sigint"
 
   sub_proc <- start_child({
     channel <- Channel$new(topic = topic)
@@ -420,11 +420,9 @@ test_that("subscribe returns -1 on SIGINT", {
   expect_equal(result, -1)
 })
 
-test_that("subscribe returns -1 on SIGTERM with the sigterm package", {
-  # Not in the Python test suite: SIGTERM can only be caught with the optional
-  # sigterm package.
+test_that("subscribe returns -1 on SIGTERM", {
+  # Not in the Python test suite: checks the graceful shutdown on SIGTERM.
   skip_if_no_fork()
-  skip_if_not_installed("sigterm")
   topic <- "test.subscribe.sigterm"
 
   sub_proc <- start_child({
@@ -432,7 +430,7 @@ test_that("subscribe returns -1 on SIGTERM with the sigterm package", {
     with_channel(channel, subscribe(channel, function(message) NULL))
   })
 
-  Sys.sleep(0.5) # Ensure subscriber is ready and sigterm is loaded
+  Sys.sleep(0.3) # Ensure subscriber is ready
   tools::pskill(sub_proc$pid, tools::SIGTERM)
   result <- collect_child(sub_proc)
 

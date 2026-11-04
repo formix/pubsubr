@@ -1,4 +1,4 @@
 library(testthat)
-library(pubsubr)
+library(pubsub)
 
-test_check("pubsubr")
+test_check("pubsub")

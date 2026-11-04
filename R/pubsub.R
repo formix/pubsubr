@@ -120,9 +120,8 @@ fetch <- function(channel) {
 #' function for each message received.
 #'
 #' @section Signal Handling:
-#' This function handles SIGINT (Ctrl+C) and, when the optional
-#' \href{https://github.com/atheriel/sigterm}{sigterm} package is installed,
-#' SIGTERM gracefully. When either signal is received:
+#' This function handles SIGTERM and SIGINT signals gracefully. When either
+#' signal is received:
 #' \itemize{
 #'   \item The subscription loop exits cleanly
 #'   \item Any message being processed completes normally (interrupts are
@@ -130,13 +129,13 @@ fetch <- function(channel) {
 #'   \item The function returns -1
 #' }
 #' SIGINT reaches R code as a condition of class `interrupt`, caught with
-#' `tryCatch(..., interrupt = function(sig) ...)`. Base R cannot intercept
-#' SIGTERM: without the sigterm package it terminates the R process
-#' immediately, and the channel directory left behind is removed later by
-#' `Channel$cleanup_inactive()`. When the sigterm package is installed, it is
-#' loaded by `subscribe()`, which then polls `sigterm::has_sigterm_flag()`.
-#' Once sigterm is loaded, R no longer exits on SIGTERM, and the flag stays
-#' set: the program should exit after `subscribe()` returns -1.
+#' `tryCatch(..., interrupt = function(sig) ...)`. Base R cannot catch
+#' SIGTERM, so a small C handler, adapted from the
+#' \href{https://github.com/atheriel/sigterm}{sigterm} package, sets a flag
+#' that the loop polls. It is installed only while `subscribe()` runs; the
+#' previous SIGTERM handler is restored afterwards and, as in Python, called
+#' if a signal was received and it is a function (the default action, which
+#' terminates R, is not called).
 #'
 #' Requires R >= 3.5.0, for `suspendInterrupts()`.
 #'
@@ -145,11 +144,11 @@ fetch <- function(channel) {
 #' @param timeout_seconds How long to listen for messages (0 = listen
 #'   indefinitely).
 #' @return The number of messages processed after normal timeout expiration,
-#'   or -1 if exited due to a termination signal (SIGINT, or SIGTERM with
-#'   the sigterm package).
+#'   or -1 if exited due to a termination signal (SIGTERM/SIGINT).
 #'
 #' Errors have class `runtime_error` if the channel is not open for reading
 #' and `value_error` if `timeout_seconds` is negative.
+#' @useDynLib pubsub, .registration = TRUE
 #' @export
 subscribe <- function(channel, callback, timeout_seconds = 0) {
   if (timeout_seconds < 0) {
@@ -161,9 +160,10 @@ subscribe <- function(channel, callback, timeout_seconds = 0) {
   }
 
   # SIGINT is delivered to R code as an "interrupt" condition, which ends the
-  # loop for a graceful shutdown. SIGTERM is detected with the optional
-  # sigterm package.
-  sigterm_received <- .sigterm_detector()
+  # loop for a graceful shutdown. SIGTERM, which base R cannot catch, sets a
+  # flag in a C handler installed for the duration of the loop.
+  .Call(C_pubsub_sigterm_install)
+  on.exit(.Call(C_pubsub_sigterm_restore))
   shutdown_requested <- FALSE
   message_count <- 0L
   start_time <- .time_seconds()
@@ -171,7 +171,7 @@ subscribe <- function(channel, callback, timeout_seconds = 0) {
   tryCatch(
     while (!shutdown_requested &&
            (listen_forever || (.time_seconds() - start_time < timeout_seconds))) {
-      if (sigterm_received()) {
+      if (.Call(C_pubsub_sigterm_received)) {
         shutdown_requested <- TRUE
         .log("INFO", "Received termination signal, exiting subscribe loop...")
         break
@@ -204,12 +204,3 @@ subscribe <- function(channel, callback, timeout_seconds = 0) {
   message_count
 }
 
-# Returns a function telling whether SIGTERM was received. Base R cannot catch
-# SIGTERM; the sigterm package (https://github.com/atheriel/sigterm) installs
-# a handler when it is loaded. Without it, SIGTERM is never reported.
-.sigterm_detector <- function() {
-  if (.Platform$OS.type == "unix" && requireNamespace("sigterm", quietly = TRUE)) {
-    return(function() isTRUE(sigterm::has_sigterm_flag()))
-  }
-  function() FALSE
-}

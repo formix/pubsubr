@@ -1,9 +1,13 @@
-Package: pubsubr
+Package: pubsub
 Type: Package
 Title: Serverless Publish-Subscribe Interprocess Messaging
 Version: 1.0.0
-Authors@R: person("formix", email = "formix@users.noreply.github.com",
-    role = c("aut", "cre"))
+Authors@R: c(
+    person("formix", email = "formix@users.noreply.github.com",
+           role = c("aut", "cre")),
+    person("Aaron", "Jacobs", role = c("ctb", "cph"),
+           comment = "Author of the 'sigterm' package, from which src/sigterm.c is adapted")
+    )
 Description: A serverless publish-subscribe library for local interprocess
     communication. Messages are routed through kernel FIFO named pipes and
     stored on the shared-memory filesystem ('/dev/shm' on Linux), with no
@@ -11,10 +15,12 @@ Description: A serverless publish-subscribe library for local interprocess
     'formix-pubsub' library and uses the same on-disk and wire formats, so R
     and Python processes can exchange messages. Requires R >= 3.5.0 for
     suspendInterrupts(), so that an interrupt (SIGINT, caught as an
-    'interrupt' condition) never stops a message half-processed. SIGTERM
-    is handled when the optional 'sigterm' package
-    (<https://github.com/atheriel/sigterm>) is installed.
+    'interrupt' condition) never stops a message half-processed. SIGTERM,
+    which base R cannot catch, is caught by a small C handler adapted from
+    the 'sigterm' package (<https://github.com/atheriel/sigterm>).
 License: MIT + file LICENSE
+Copyright: See inst/COPYRIGHTS. src/sigterm.c is adapted from the 'sigterm'
+    package, Copyright Aaron Jacobs, under the Apache License 2.0.
 URL: https://github.com/formix/pubsubr, https://github.com/formix/pubsub
 BugReports: https://github.com/formix/pubsubr/issues
 Encoding: UTF-8
@@ -25,11 +31,9 @@ Imports:
     tools
 Suggests:
     parallel,
-    sigterm,
     testthat (>= 3.0.0),
     withr
 OS_type: unix
-NeedsCompilation: no
-Remotes: atheriel/sigterm
+NeedsCompilation: yes
 Config/testthat/edition: 3
 RoxygenNote: 7.3.2

@@ -16,8 +16,7 @@ indefinitely).}
 }
 \value{
 The number of messages processed after normal timeout expiration,
-  or -1 if exited due to a termination signal (SIGINT, or SIGTERM with
-  the sigterm package).
+  or -1 if exited due to a termination signal (SIGTERM/SIGINT).
 
 Errors have class `runtime_error` if the channel is not open for reading
 and `value_error` if `timeout_seconds` is negative.
@@ -28,9 +27,8 @@ function for each message received.
 }
 \section{Signal Handling}{
 
-This function handles SIGINT (Ctrl+C) and, when the optional
-\href{https://github.com/atheriel/sigterm}{sigterm} package is installed,
-SIGTERM gracefully. When either signal is received:
+This function handles SIGTERM and SIGINT signals gracefully. When either
+signal is received:
 \itemize{
   \item The subscription loop exits cleanly
   \item Any message being processed completes normally (interrupts are
@@ -38,13 +36,13 @@ SIGTERM gracefully. When either signal is received:
   \item The function returns -1
 }
 SIGINT reaches R code as a condition of class `interrupt`, caught with
-`tryCatch(..., interrupt = function(sig) ...)`. Base R cannot intercept
-SIGTERM: without the sigterm package it terminates the R process
-immediately, and the channel directory left behind is removed later by
-`Channel$cleanup_inactive()`. When the sigterm package is installed, it is
-loaded by `subscribe()`, which then polls `sigterm::has_sigterm_flag()`.
-Once sigterm is loaded, R no longer exits on SIGTERM, and the flag stays
-set: the program should exit after `subscribe()` returns -1.
+`tryCatch(..., interrupt = function(sig) ...)`. Base R cannot catch
+SIGTERM, so a small C handler, adapted from the
+\href{https://github.com/atheriel/sigterm}{sigterm} package, sets a flag
+that the loop polls. It is installed only while `subscribe()` runs; the
+previous SIGTERM handler is restored afterwards and, as in Python, called
+if a signal was received and it is a function (the default action, which
+terminates R, is not called).
 
 Requires R >= 3.5.0, for `suspendInterrupts()`.
 }
