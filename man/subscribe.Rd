@@ -16,7 +16,8 @@ indefinitely).}
 }
 \value{
 The number of messages processed after normal timeout expiration,
-  or -1 if exited due to an interrupt (SIGINT).
+  or -1 if exited due to a termination signal (SIGINT, or SIGTERM with
+  the sigterm package).
 
 Errors have class `runtime_error` if the channel is not open for reading
 and `value_error` if `timeout_seconds` is negative.
@@ -27,15 +28,24 @@ function for each message received.
 }
 \section{Signal Handling}{
 
-This function handles SIGINT (Ctrl+C) gracefully. When it is received:
+This function handles SIGINT (Ctrl+C) and, when the optional
+\href{https://github.com/atheriel/sigterm}{sigterm} package is installed,
+SIGTERM gracefully. When either signal is received:
 \itemize{
   \item The subscription loop exits cleanly
   \item Any message being processed completes normally (interrupts are
     suspended while a message is fetched and handled)
   \item The function returns -1
 }
-Base R cannot intercept SIGTERM: it terminates the R process immediately.
-The channel directory left behind is removed by
-`Channel$cleanup_inactive()`, since its process is no longer running.
+SIGINT reaches R code as a condition of class `interrupt`, caught with
+`tryCatch(..., interrupt = function(sig) ...)`. Base R cannot intercept
+SIGTERM: without the sigterm package it terminates the R process
+immediately, and the channel directory left behind is removed later by
+`Channel$cleanup_inactive()`. When the sigterm package is installed, it is
+loaded by `subscribe()`, which then polls `sigterm::has_sigterm_flag()`.
+Once sigterm is loaded, R no longer exits on SIGTERM, and the flag stays
+set: the program should exit after `subscribe()` returns -1.
+
+Requires R >= 3.5.0, for `suspendInterrupts()`.
 }
 

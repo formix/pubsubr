@@ -9,21 +9,27 @@ Description: A serverless publish-subscribe library for local interprocess
     stored on the shared-memory filesystem ('/dev/shm' on Linux), with no
     broker or server process. This is a literal translation of the Python
     'formix-pubsub' library and uses the same on-disk and wire formats, so R
-    and Python processes can exchange messages.
+    and Python processes can exchange messages. Requires R >= 3.5.0 for
+    suspendInterrupts(), so that an interrupt (SIGINT, caught as an
+    'interrupt' condition) never stops a message half-processed. SIGTERM
+    is handled when the optional 'sigterm' package
+    (<https://github.com/atheriel/sigterm>) is installed.
 License: MIT + file LICENSE
 URL: https://github.com/formix/pubsubr, https://github.com/formix/pubsub
 BugReports: https://github.com/formix/pubsubr/issues
 Encoding: UTF-8
-Depends: R (>= 4.1.0)
+Depends: R (>= 3.5.0)
 Imports:
     jsonlite,
     R6,
     tools
 Suggests:
     parallel,
+    sigterm,
     testthat (>= 3.0.0),
     withr
 OS_type: unix
 NeedsCompilation: no
+Remotes: atheriel/sigterm
 Config/testthat/edition: 3
 RoxygenNote: 7.3.2

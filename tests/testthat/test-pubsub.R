@@ -420,6 +420,25 @@ test_that("subscribe returns -1 on SIGINT", {
   expect_equal(result, -1)
 })
 
+test_that("subscribe returns -1 on SIGTERM with the sigterm package", {
+  # Not in the Python test suite: SIGTERM can only be caught with the optional
+  # sigterm package.
+  skip_if_no_fork()
+  skip_if_not_installed("sigterm")
+  topic <- "test.subscribe.sigterm"
+
+  sub_proc <- start_child({
+    channel <- Channel$new(topic = topic)
+    with_channel(channel, subscribe(channel, function(message) NULL))
+  })
+
+  Sys.sleep(0.5) # Ensure subscriber is ready and sigterm is loaded
+  tools::pskill(sub_proc$pid, tools::SIGTERM)
+  result <- collect_child(sub_proc)
+
+  expect_equal(result, -1)
+})
+
 # -------------------------------------------------------------- integration
 
 test_that("pub sub flow", {

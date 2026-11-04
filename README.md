@@ -25,7 +25,16 @@ Unlike traditional pub/sub systems (Redis, RabbitMQ, ZeroMQ), **pubsubr requires
 remotes::install_github("formix/pubsubr")
 ```
 
-Requires R 4.1 or later on a Unix-like system (Linux, macOS).
+Requires **R 3.5.0 or later** (for `suspendInterrupts()`) on a Unix-like
+system (Linux, macOS).
+
+To let `subscribe()` stop gracefully on SIGTERM, also install the optional
+[sigterm](https://github.com/atheriel/sigterm) package (see
+[Signals](#signals)):
+
+```r
+remotes::install_github("atheriel/sigterm")
+```
 
 ## Quick Start: Publish & Subscribe Across Processes
 
@@ -41,7 +50,8 @@ with_channel(channel, {
     cat("Received:", rawToChar(msg$content), "\n")
   }
 
-  # Blocks and listens until interrupted with Ctrl+C (SIGINT)
+  # Blocks and listens until terminated with Ctrl+C (SIGINT), or SIGTERM
+  # when the sigterm package is installed
   subscribe(channel, on_message)
 })
 ```
@@ -187,6 +197,30 @@ with_channel(channel, {
 
 > **Note:** Wildcards are only valid when creating channels for subscribing. You must publish to concrete topics (e.g. `logs.info`, not `logs.+`).
 
+## Signals
+
+`subscribe()` stops gracefully, finishing the message being processed and
+returning -1, when it receives:
+
+- **SIGINT** (Ctrl+C): R delivers it as a condition of class `interrupt`,
+  caught with `tryCatch(..., interrupt = function(sig) ...)`. Interrupts are
+  suspended while a message is fetched and handled, with
+  `suspendInterrupts()` (R >= 3.5.0).
+- **SIGTERM**, only when the [sigterm](https://github.com/atheriel/sigterm)
+  package is installed. Base R cannot catch SIGTERM, so without sigterm the
+  process ends immediately and its channel is removed later by
+  `Channel$cleanup_inactive()`. Once sigterm is loaded, R no longer exits on
+  SIGTERM: let your script end after `subscribe()` returns -1.
+
+`systemctl stop` sends SIGTERM by default. Without the sigterm package, set
+`KillSignal=SIGINT` in the unit file to get the same graceful shutdown:
+
+```ini
+[Service]
+ExecStart=/usr/bin/Rscript /path/to/subscriber.R
+KillSignal=SIGINT
+```
+
 ## Configuration
 
 | Environment Variable | Description | Default |
@@ -201,7 +235,7 @@ with_channel(channel, {
 
 - `publish(topic, data, headers = NULL)`: publish a raw vector to all channels matching `topic`. Returns the number of channels that received the message.
 - `fetch(channel)`: fetch the next message without blocking. Returns `NULL` if the queue is empty.
-- `subscribe(channel, callback, timeout_seconds = 0)`: deliver messages to `callback` as they arrive (0 = listen indefinitely). Returns the number of messages processed, or -1 if interrupted by SIGINT (Ctrl+C).
+- `subscribe(channel, callback, timeout_seconds = 0)`: deliver messages to `callback` as they arrive (0 = listen indefinitely). Returns the number of messages processed, or -1 if stopped by a signal (see [Signals](#signals)).
 - `Channel$new(topic)`: a subscription endpoint. Use `with_channel(channel, { ... })` to ensure cleanup. Class methods: `Channel$active_paths()`, `Channel$inactive_paths()`, `Channel$matching_active_paths(topic)`, `Channel$cleanup_inactive()`.
 - `Message`: fields `id`, `timestamp` (microseconds), `topic`, `content` (raw vector), `headers` (named list). `msg$to_bytes()` and `Message$from_bytes(data)` serialize and deserialize.
 
@@ -216,7 +250,7 @@ with_channel(channel, {
 | `ValueError`, `RuntimeError`, `TypeError`, `OSError` | conditions of class `value_error`, `runtime_error`, `type_error`, `os_error` |
 | `logging` | `message()` on stderr, filtered by the `pubsubr.log_level` option |
 | 64-bit integer ids | doubles, exact up to 2^53 (current microsecond timestamps are around 2^51) |
-| SIGTERM and SIGINT handled by `subscribe()` | only SIGINT (Ctrl+C), received as an R `interrupt` condition; base R cannot intercept SIGTERM, which ends the process (its channel is then removed by `Channel$cleanup_inactive()`) |
+| SIGTERM and SIGINT handled by `subscribe()` | SIGINT as an R `interrupt` condition; SIGTERM only with the optional sigterm package |
 | threads / `multiprocessing` in tests | forked processes with `parallel::mcparallel` |
 
 ## Development
