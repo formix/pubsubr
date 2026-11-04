@@ -8,7 +8,7 @@
 #'
 #' Creates a directory in the pubsub base directory with format
 #' `{topic}_{random_12_chars}_{process_id}`. It contains a non-blocking FIFO
-#' named `queue` for message passing.
+#' named `queue` for message passing, created and read with [base::fifo()].
 #'
 #' Topic format supports wildcards:
 #' \itemize{
@@ -43,7 +43,7 @@ Channel <- R6::R6Class(
     #'   wildcards).
     initialize = function(topic) {
       Channel$validate_topic(topic)
-      private$fp <- -1L
+      private$fp <- NULL
       self$topic <- topic
       self$process_id <- Sys.getpid()
       self$random_id <- private$generate_random_id()
@@ -57,12 +57,17 @@ Channel <- R6::R6Class(
 
     #' @description Open the FIFO queue for reading in non-blocking mode.
     open = function() {
-      if (private$fp != -1L) {
+      if (!is.null(private$fp)) {
         return(invisible(self)) # Already open
       }
 
       private$fp <- tryCatch(
-        .Call(C_pubsubr_open_nonblock, self$queue_path, 0L),
+        fifo(self$queue_path, open = "rb", blocking = FALSE),
+        warning = function(e) {
+          .raise("os_error", sprintf(
+            "Failed to open queue for reading: %s", conditionMessage(e)
+          ), parent = e)
+        },
         error = function(e) {
           .raise("os_error", sprintf(
             "Failed to open queue for reading: %s", conditionMessage(e)
@@ -79,15 +84,15 @@ Channel <- R6::R6Class(
     #' the channel is disposed, preventing resource leaks.
     close = function() {
       # Close the file descriptor if it's open
-      if (private$fp == -1L) {
+      if (is.null(private$fp)) {
         return(invisible(self)) # Already closed or never opened
       }
 
       on.exit(Channel$delete_recursive(self$directory_path))
       tryCatch(
         {
-          .Call(C_pubsubr_close_fd, private$fp)
-          private$fp <- -1L
+          close(private$fp)
+          private$fp <- NULL
         },
         error = function(e) {
           .raise("runtime_error", sprintf(
@@ -126,18 +131,18 @@ Channel <- R6::R6Class(
     #'   reading.
     is_open = function(value) {
       if (!missing(value)) stop("is_open is read-only", call. = FALSE)
-      private$fp != -1L
+      !is.null(private$fp)
     },
 
-    #' @field fd The file descriptor of the open FIFO, or -1.
-    fd = function(value) {
-      if (!missing(value)) stop("fd is read-only", call. = FALSE)
+    #' @field connection The fifo connection open for reading, or `NULL`.
+    connection = function(value) {
+      if (!missing(value)) stop("connection is read-only", call. = FALSE)
       private$fp
     }
   ),
 
   private = list(
-    fp = -1L,
+    fp = NULL,
 
     # Generate a random 12-character string.
     generate_random_id = function() {
@@ -154,7 +159,11 @@ Channel <- R6::R6Class(
             stop("cannot create directory '", self$directory_path, "'")
           }
           if (!file.exists(self$queue_path)) {
-            .Call(C_pubsubr_mkfifo, self$queue_path)
+            # fifo() creates the FIFO when it opens it for writing; opening it
+            # for both reading and writing does not need another reader.
+            con <- fifo(self$queue_path, open = "w+b", blocking = FALSE)
+            close(con)
+            Sys.chmod(self$queue_path, mode = "0660", use_umask = FALSE)
           }
         },
         error = function(e) {
@@ -168,7 +177,7 @@ Channel <- R6::R6Class(
     finalize = function() {
       # Not part of the Python API; avoids leaking file descriptors when a
       # channel object is garbage-collected while open.
-      if (private$fp != -1L) {
+      if (!is.null(private$fp)) {
         try(self$close(), silent = TRUE)
       }
     }

@@ -62,8 +62,8 @@ get_base_dir <- function() {
 
 #' Check if a process with the given PID is currently running
 #'
-#' Uses signal 0 (`kill(pid, 0)`), which does not send a signal but checks
-#' whether the process exists.
+#' Uses signal 0 (`tools::pskill(pid, 0)`, like Python's `os.kill(pid, 0)`),
+#' which does not send a signal but checks whether the process exists.
 #'
 #' @param pid The process ID to check.
 #' @return `TRUE` if the process is running, `FALSE` otherwise.
@@ -73,5 +73,6 @@ is_process_running <- function(pid) {
   if (length(pid) != 1L || is.na(pid) || pid <= 0) {
     return(FALSE)
   }
-  .Call(C_pubsubr_is_process_running, pid)
+  # Signal 0 doesn't send a signal but checks if the process exists
+  isTRUE(tools::pskill(pid, 0L))
 }

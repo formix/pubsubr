@@ -13,7 +13,7 @@ Represents a pubsub channel using shared memory filesystem and FIFO queues.
 
 Creates a directory in the pubsub base directory with format
 `{topic}_{random_12_chars}_{process_id}`. It contains a non-blocking FIFO
-named `queue` for message passing.
+named `queue` for message passing, created and read with [base::fifo()].
 
 Topic format supports wildcards:
 \itemize{
@@ -49,7 +49,7 @@ Use [with_channel()] in place of Python's `with channel:` block.
 \item{\code{is_open}}{Check if the channel's FIFO is currently open for
 reading.}
 
-\item{\code{fd}}{The file descriptor of the open FIFO, or -1.}
+\item{\code{connection}}{The fifo connection open for reading, or `NULL`.}
 }
 \if{html}{\out{</div>}}
 }

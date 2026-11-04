@@ -16,7 +16,7 @@ indefinitely).}
 }
 \value{
 The number of messages processed after normal timeout expiration,
-  or -1 if exited due to a termination signal (SIGTERM/SIGINT).
+  or -1 if exited due to an interrupt (SIGINT).
 
 Errors have class `runtime_error` if the channel is not open for reading
 and `value_error` if `timeout_seconds` is negative.
@@ -27,17 +27,15 @@ function for each message received.
 }
 \section{Signal Handling}{
 
-This function handles SIGTERM and SIGINT signals gracefully. When either
-signal is received:
+This function handles SIGINT (Ctrl+C) gracefully. When it is received:
 \itemize{
   \item The subscription loop exits cleanly
-  \item Any message being processed completes normally
+  \item Any message being processed completes normally (interrupts are
+    suspended while a message is fetched and handled)
   \item The function returns -1
-  \item The original signal handler (if any) is called before returning
 }
-This allows subscriber services to be terminated gracefully. In an
-interactive R session, R's own SIGINT handler is the original handler, so
-Ctrl+C still interrupts the calling code once the loop has exited, the same
-way Python raises `KeyboardInterrupt`.
+Base R cannot intercept SIGTERM: it terminates the R process immediately.
+The channel directory left behind is removed by
+`Channel$cleanup_inactive()`, since its process is no longer running.
 }
 

@@ -17,11 +17,13 @@ Encoding: UTF-8
 Depends: R (>= 4.1.0)
 Imports:
     jsonlite,
-    R6
+    R6,
+    tools
 Suggests:
+    parallel,
     testthat (>= 3.0.0),
     withr
 OS_type: unix
-NeedsCompilation: yes
+NeedsCompilation: no
 Config/testthat/edition: 3
 RoxygenNote: 7.3.2

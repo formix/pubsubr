@@ -8,6 +8,5 @@
 #' processes can talk to each other.
 #'
 #' @keywords internal
-#' @useDynLib pubsubr, .registration = TRUE
 #' @importFrom R6 R6Class
 "_PACKAGE"

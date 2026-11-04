@@ -14,7 +14,7 @@ same machine can publish and subscribe to each other**.
 Unlike traditional pub/sub systems (Redis, RabbitMQ, ZeroMQ), **pubsubr requires no broker, no server process, and no external service**. Messages are routed through kernel FIFO named pipes and stored on the shared-memory filesystem (`/dev/shm` on Linux), making communication fast and entirely local.
 
 - **No infrastructure**: install and use, nothing to start or configure
-- **Minimal dependencies**: `R6` and `jsonlite`, plus a small C file for the POSIX system calls base R lacks
+- **Pure R**: no compiled code; FIFOs use base R `fifo()` connections. Dependencies are `R6` and `jsonlite`
 - **Automatic cleanup**: channels are tied to process IDs; stale channels from crashed processes are detected and cleaned up automatically
 - **Messages persist until consumed**: published messages are stored as files and delivered to all matching subscribers
 
@@ -25,8 +25,7 @@ Unlike traditional pub/sub systems (Redis, RabbitMQ, ZeroMQ), **pubsubr requires
 remotes::install_github("formix/pubsubr")
 ```
 
-Requires R 4.1 or later on a Unix-like system (Linux, macOS). The package
-contains C code, so a compiler is needed to install it from source.
+Requires R 4.1 or later on a Unix-like system (Linux, macOS).
 
 ## Quick Start: Publish & Subscribe Across Processes
 
@@ -42,7 +41,7 @@ with_channel(channel, {
     cat("Received:", rawToChar(msg$content), "\n")
   }
 
-  # Blocks and listens until terminated with Ctrl+C (SIGINT) or SIGTERM
+  # Blocks and listens until interrupted with Ctrl+C (SIGINT)
   subscribe(channel, on_message)
 })
 ```
@@ -202,7 +201,7 @@ with_channel(channel, {
 
 - `publish(topic, data, headers = NULL)`: publish a raw vector to all channels matching `topic`. Returns the number of channels that received the message.
 - `fetch(channel)`: fetch the next message without blocking. Returns `NULL` if the queue is empty.
-- `subscribe(channel, callback, timeout_seconds = 0)`: deliver messages to `callback` as they arrive (0 = listen indefinitely). Returns the number of messages processed, or -1 if interrupted by SIGTERM/SIGINT.
+- `subscribe(channel, callback, timeout_seconds = 0)`: deliver messages to `callback` as they arrive (0 = listen indefinitely). Returns the number of messages processed, or -1 if interrupted by SIGINT (Ctrl+C).
 - `Channel$new(topic)`: a subscription endpoint. Use `with_channel(channel, { ... })` to ensure cleanup. Class methods: `Channel$active_paths()`, `Channel$inactive_paths()`, `Channel$matching_active_paths(topic)`, `Channel$cleanup_inactive()`.
 - `Message`: fields `id`, `timestamp` (microseconds), `topic`, `content` (raw vector), `headers` (named list). `msg$to_bytes()` and `Message$from_bytes(data)` serialize and deserialize.
 
@@ -217,6 +216,7 @@ with_channel(channel, {
 | `ValueError`, `RuntimeError`, `TypeError`, `OSError` | conditions of class `value_error`, `runtime_error`, `type_error`, `os_error` |
 | `logging` | `message()` on stderr, filtered by the `pubsubr.log_level` option |
 | 64-bit integer ids | doubles, exact up to 2^53 (current microsecond timestamps are around 2^51) |
+| SIGTERM and SIGINT handled by `subscribe()` | only SIGINT (Ctrl+C), received as an R `interrupt` condition; base R cannot intercept SIGTERM, which ends the process (its channel is then removed by `Channel$cleanup_inactive()`) |
 | threads / `multiprocessing` in tests | forked processes with `parallel::mcparallel` |
 
 ## Development

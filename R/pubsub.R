@@ -45,14 +45,20 @@ publish <- function(topic, data, headers = NULL) {
         if (!suppressWarnings(file.link(message_temp_file, message_file_path))) {
           stop("cannot link '", message_temp_file, "' to '", message_file_path, "'")
         }
-        queue_file <- .Call(C_pubsubr_open_nonblock, queue_path, 1L)
+        # Opening a non-blocking fifo for writing fails (with a warning, then
+        # an error) when no process is reading on it.
+        queue_file <- fifo(queue_path, open = "wb", blocking = FALSE)
         tryCatch(
           {
-            .Call(C_pubsubr_write_fd, queue_file, .pack_u64(message$id))
+            writeBin(.pack_u64(message$id), queue_file)
             publication_count <- publication_count + 1L
           },
-          finally = .Call(C_pubsubr_close_fd, queue_file)
+          finally = close(queue_file)
         )
+      },
+      warning = function(e) {
+        .log("WARNING", "Failed to publish message %s to %s: %s",
+             format(message$id, scientific = FALSE), queue_path, conditionMessage(e))
       },
       error = function(e) {
         .log("WARNING", "Failed to publish message %s to %s: %s",
@@ -87,11 +93,7 @@ fetch <- function(channel) {
   }
 
   # Read message ID from queue (non-blocking)
-  id_bytes <- .Call(C_pubsubr_read_fd, channel$fd, 8L)
-  if (is.null(id_bytes)) {
-    # No data available (non-blocking read)
-    return(NULL)
-  }
+  id_bytes <- readBin(channel$connection, "raw", 8L)
 
   if (length(id_bytes) != 8L) {
     # No data available or incomplete ID
@@ -118,25 +120,23 @@ fetch <- function(channel) {
 #' function for each message received.
 #'
 #' @section Signal Handling:
-#' This function handles SIGTERM and SIGINT signals gracefully. When either
-#' signal is received:
+#' This function handles SIGINT (Ctrl+C) gracefully. When it is received:
 #' \itemize{
 #'   \item The subscription loop exits cleanly
-#'   \item Any message being processed completes normally
+#'   \item Any message being processed completes normally (interrupts are
+#'     suspended while a message is fetched and handled)
 #'   \item The function returns -1
-#'   \item The original signal handler (if any) is called before returning
 #' }
-#' This allows subscriber services to be terminated gracefully. In an
-#' interactive R session, R's own SIGINT handler is the original handler, so
-#' Ctrl+C still interrupts the calling code once the loop has exited, the same
-#' way Python raises `KeyboardInterrupt`.
+#' Base R cannot intercept SIGTERM: it terminates the R process immediately.
+#' The channel directory left behind is removed by
+#' `Channel$cleanup_inactive()`, since its process is no longer running.
 #'
 #' @param channel The [Channel] to subscribe to.
 #' @param callback Function to call with each received [Message].
 #' @param timeout_seconds How long to listen for messages (0 = listen
 #'   indefinitely).
 #' @return The number of messages processed after normal timeout expiration,
-#'   or -1 if exited due to a termination signal (SIGTERM/SIGINT).
+#'   or -1 if exited due to an interrupt (SIGINT).
 #'
 #' Errors have class `runtime_error` if the channel is not open for reading
 #' and `value_error` if `timeout_seconds` is negative.
@@ -150,31 +150,36 @@ subscribe <- function(channel, callback, timeout_seconds = 0) {
     .raise("runtime_error", "Channel must be open to subscribe")
   }
 
-  # Register SIGTERM and SIGINT handlers for graceful shutdown. The original
-  # handlers are restored, and called if a signal was received, on exit.
-  .Call(C_pubsubr_install_signal_handlers)
-  on.exit(.Call(C_pubsubr_restore_signal_handlers))
-  shutdown_requested <- function() .Call(C_pubsubr_shutdown_signal) != 0L
-
+  # SIGINT is delivered to R code as an "interrupt" condition, which ends the
+  # loop for a graceful shutdown.
+  shutdown_requested <- FALSE
   message_count <- 0L
   start_time <- .time_seconds()
   listen_forever <- timeout_seconds == 0
-  while (!shutdown_requested() &&
-         (listen_forever || (.time_seconds() - start_time < timeout_seconds))) {
-    message <- fetch(channel)
-    if (!is.null(message)) {
-      tryCatch(
-        callback(message),
-        error = function(e) {
-          .log("WARNING", "Error processing message %s: %s",
-               format(message), conditionMessage(e))
+  tryCatch(
+    while (!shutdown_requested &&
+           (listen_forever || (.time_seconds() - start_time < timeout_seconds))) {
+      suspendInterrupts({
+        message <- fetch(channel)
+        if (!is.null(message)) {
+          tryCatch(
+            callback(message),
+            error = function(e) {
+              .log("WARNING", "Error processing message %s: %s",
+                   format(message), conditionMessage(e))
+            }
+          )
+          message_count <- message_count + 1L
         }
-      )
-      message_count <- message_count + 1L
+      })
+      Sys.sleep(0.01) # Sleep briefly to avoid busy waiting
+    },
+    interrupt = function(e) {
+      shutdown_requested <<- TRUE
+      .log("INFO", "Received termination signal, exiting subscribe loop...")
     }
-    Sys.sleep(0.01) # Sleep briefly to avoid busy waiting
-  }
-  if (shutdown_requested()) {
+  )
+  if (shutdown_requested) {
     .log("INFO", "Exiting subscribe loop on '%s'. Handled %i messages.",
          channel$topic, message_count)
     return(-1L) # Indicate shutdown by signal

@@ -403,8 +403,8 @@ test_that("subscribe on closed channel", {
                class = "runtime_error")
 })
 
-test_that("subscribe returns -1 on SIGTERM", {
-  # Not in the Python test suite: checks the graceful shutdown on SIGTERM.
+test_that("subscribe returns -1 on SIGINT", {
+  # Not in the Python test suite: checks the graceful shutdown on SIGINT.
   skip_if_no_fork()
   topic <- "test.subscribe.sigterm"
 
@@ -414,7 +414,7 @@ test_that("subscribe returns -1 on SIGTERM", {
   })
 
   Sys.sleep(0.3) # Ensure subscriber is ready
-  tools::pskill(sub_proc$pid, tools::SIGTERM)
+  tools::pskill(sub_proc$pid, tools::SIGINT)
   result <- collect_child(sub_proc)
 
   expect_equal(result, -1)
