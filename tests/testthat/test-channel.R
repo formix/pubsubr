@@ -129,8 +129,7 @@ test_that("active and inactive channels are listed, inactive ones cleaned up", {
     Sys.chmod(c(dead[2], file.path(dead[2], "sub")), "0755")
     unlink(dead[2], recursive = TRUE)
   })
-  logger::log_appender(logger::appender_void, namespace = "pubsubr") # expected failures
-  withr::defer(logger::log_appender(logger::appender_console, namespace = "pubsubr"))
+  local_quiet_logs()
   expect_no_error(suppressWarnings(cleanup_inactive_channels()))
   expect_false(dir.exists(dead[1]))
   expect_true(dir.exists(dead[2]))

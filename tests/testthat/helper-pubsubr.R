@@ -15,3 +15,32 @@ local_base_dir <- function(path, env = parent.frame()) {
   .pubsub_state$base_dir_cache <- NULL
   withr::defer(.pubsub_state$base_dir_cache <- NULL, envir = env)
 }
+
+# Equivalent of multiprocessing.Process(target=...).start(): runs `expr` in a
+# forked child process. `collect_child()` joins it and returns its value.
+start_child <- function(expr) parallel::mcparallel(expr, silent = TRUE)
+
+collect_child <- function(job) {
+  result <- parallel::mccollect(job, wait = TRUE)[[1]]
+  if (inherits(result, "try-error")) stop(result)
+  result
+}
+
+# Files of a channel directory other than its queue (the delivered messages).
+message_files <- function(channel) {
+  files <- list.files(channel$directory_path, all.files = TRUE, no.. = TRUE)
+  files[files != "queue"]
+}
+
+# Forked processes and timing make these tests too fragile for CRAN's machines.
+skip_if_no_fork <- function() {
+  skip_on_cran()
+  skip_on_os("windows")
+}
+
+# Silence the library's log messages for the calling test (expected warnings).
+local_quiet_logs <- function(env = parent.frame()) {
+  logger::log_appender(logger::appender_void, namespace = "pubsubr")
+  withr::defer(logger::log_appender(logger::appender_console, namespace = "pubsubr"),
+               envir = env)
+}
