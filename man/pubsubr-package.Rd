@@ -25,5 +25,10 @@ Useful links:
 \author{
 \strong{Maintainer}: formix \email{formix@users.noreply.github.com}
 
+Authors:
+\itemize{
+  \item formix \email{formix@users.noreply.github.com}
+}
+
 }
 \keyword{internal}

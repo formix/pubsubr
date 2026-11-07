@@ -45,6 +45,42 @@ test_that("topic validation empty", {
   expect_error(Channel(topic = ""), "cannot be empty", class = "value_error")
 })
 
+test_that("topic validation empty or blank words", {
+  invalid_topics <- c(
+    " ", "   ", ".", ".a", "a.", "a..b", "a. .b", "a.  ", " .a", "a.+.", "=..a"
+  )
+
+  for (invalid_topic in invalid_topics) {
+    err <- expect_error(Channel(topic = invalid_topic), class = "value_error")
+    expect_match(tolower(conditionMessage(err)), "empty or blank", fixed = TRUE)
+  }
+})
+
+test_that("topic validation wildcards must be alone between dots", {
+  invalid_topics <- c(
+    "topic=", "topic+", "=topic", "+topic", "test.item=", "test.item+.more",
+    "test.=x.more", "test.a+b", "test.==", "test.++", "test.=+"
+  )
+
+  for (invalid_topic in invalid_topics) {
+    err <- expect_error(Channel(topic = invalid_topic), class = "value_error")
+    expect_match(tolower(conditionMessage(err)), "wildcard", fixed = TRUE)
+  }
+})
+
+test_that("topic validation plus and equals cannot be adjacent", {
+  invalid_topics <- c("+.=", "=.+", "a.+.=.b", "a.=.+.b", "a.=.=.+", "+.+.=", "+.+", "a.+.+.b")
+  for (invalid_topic in invalid_topics) {
+    err <- expect_error(Channel(topic = invalid_topic), class = "value_error")
+    expect_match(tolower(conditionMessage(err)), "adjacent", fixed = TRUE)
+  }
+
+  # Separated by a literal word they are fine
+  for (valid_topic in c("adjacent.+.b.=", "adjacent.=.b.+", "adjacent.=.=")) {
+    track(Channel(topic = valid_topic))
+  }
+})
+
 test_that("topic validation invalid chars", {
   invalid_topics <- c(
     "test/topic",
@@ -82,8 +118,8 @@ test_that("topic validation valid chars", {
     "test123",
     "TEST",
     "Test.Mixed.Case",
-    "topic+",
-    "topic=",
+    "validity.+",
+    "validity.=",
     "a.b.c.d.e",
     "123.456",
     "a-b-c",
@@ -215,47 +251,6 @@ test_that("cleanup inactive", {
   cleanup_inactive_channels()
 
   expect_false(file.exists(fake_dir))
-})
-
-test_that("matching active paths exact", {
-  channel <- track(Channel(topic = "exact.match.topic"))
-
-  matches <- matching_active_channel_paths("exact.match.topic")
-
-  expect_gt(length(matches), 0)
-  expect_true(channel$directory_name %in% basename(matches))
-})
-
-test_that("matching active paths single wildcard", {
-  # The = wildcard is converted to [a-zA-Z0-9-] which matches a single
-  # character, not a single word.
-  channel1 <- track(Channel(topic = "tes=.match"))
-
-  # Should match: the = becomes [a-zA-Z0-9-] in regex
-  matches <- matching_active_channel_paths("test.match")
-  has_wildcard_match <- any(grepl("tes=.match", basename(matches), fixed = TRUE))
-  # The wildcard should match (t-e-s-[any allowed char].match)
-  expect_true(has_wildcard_match)
-})
-
-test_that("matching active paths multi wildcard", {
-  channel <- track(Channel(topic = "test.+"))
-
-  # Should match zero or more words
-  matches_single <- matching_active_channel_paths("test.word")
-  matches_multi <- matching_active_channel_paths("test.word.sub.topic")
-
-  expect_true(any(startsWith(basename(matches_single), "test.+")))
-  expect_true(any(startsWith(basename(matches_multi), "test.+")))
-})
-
-test_that("matching active paths no match", {
-  channel <- track(Channel(topic = "specific.topic"))
-
-  matches <- matching_active_channel_paths("different.topic")
-
-  # Should not include our channel
-  expect_false(channel$directory_name %in% basename(matches))
 })
 
 test_that("channel base dir", {

@@ -2,170 +2,71 @@
 % Please edit documentation in R/channel.R
 \name{Channel}
 \alias{Channel}
+\alias{open.Channel}
+\alias{close.Channel}
+\alias{format.Channel}
+\alias{print.Channel}
 \title{Channel}
-\description{
-Channel
+\usage{
+Channel(topic)
 
-Channel
+\method{open}{Channel}(con, ...)
+
+\method{close}{Channel}(con, ...)
+
+\method{format}{Channel}(x, ...)
+
+\method{print}{Channel}(x, ...)
+}
+\arguments{
+\item{topic}{The topic string (dot-separated terms with optional
+wildcards).}
+
+\item{con}{A `Channel`.}
+
+\item{...}{Ignored.}
+
+\item{x}{A `Channel`.}
+}
+\value{
+A list of class `"Channel"`.
+}
+\description{
+Creates a pubsub channel using the shared memory filesystem and a FIFO
+queue, and returns it as an old-style (S3) object: a list of class
+`"Channel"`.
 }
 \details{
-Represents a pubsub channel using shared memory filesystem and FIFO queues.
+The channel directory is named `{topic}_{random_12_chars}_{process_id}` and
+holds a non-blocking FIFO named `queue`, created and read with
+[base::fifo()].
 
-Creates a directory in the pubsub base directory with format
-`{topic}_{random_12_chars}_{process_id}`. It contains a non-blocking FIFO
-named `queue` for message passing, created and read with [base::fifo()].
-
-Topic format supports wildcards:
+Topics are dot-separated words, none of them empty or blank. Wildcards are
+supported, each one standing alone as a whole word:
 \itemize{
-  \item `=` for single word wildcard
-  \item `+` for multiple words wildcard
+  \item `=` matches exactly one word
+  \item `+` matches one or more words, or zero or more words when it is the
+    last word of the topic
 }
+A `+` cannot be directly next to an `=` or to another `+`.
 
-The Python static methods are available on the class generator:
-`Channel$cleanup_inactive()`, `Channel$active_paths()`,
-`Channel$inactive_paths()` and `Channel$matching_active_paths(topic)`.
-Use [with_channel()] in place of Python's `with channel:` block.
-}
-\section{Public fields}{
-\if{html}{\out{<div class="r6-fields">}}
+Elements of the list:
 \describe{
-\item{\code{topic}}{The topic string.}
-
-\item{\code{process_id}}{The id of the process that owns the channel.}
-
-\item{\code{random_id}}{A random 12-character string.}
-
-\item{\code{directory_name}}{`{topic}_{random_id}_{process_id}`.}
-
-\item{\code{directory_path}}{Full path of the channel directory.}
-
-\item{\code{queue_path}}{Full path of the channel FIFO.}
-}
-\if{html}{\out{</div>}}
-}
-\section{Active bindings}{
-\if{html}{\out{<div class="r6-active-bindings">}}
-\describe{
-\item{\code{is_open}}{Check if the channel's FIFO is currently open for
-reading.}
-
-\item{\code{connection}}{The fifo connection open for reading, or `NULL`.}
-}
-\if{html}{\out{</div>}}
-}
-\section{Methods}{
-\subsection{Public methods}{
-\itemize{
-\item \href{#method-Channel-new}{\code{Channel$new()}}
-\item \href{#method-Channel-open}{\code{Channel$open()}}
-\item \href{#method-Channel-close}{\code{Channel$close()}}
-\item \href{#method-Channel-format}{\code{Channel$format()}}
-\item \href{#method-Channel-repr}{\code{Channel$repr()}}
-\item \href{#method-Channel-print}{\code{Channel$print()}}
-\item \href{#method-Channel-clone}{\code{Channel$clone()}}
-}
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-Channel-new"></a>}}
-\if{latex}{\out{\hypertarget{method-Channel-new}{}}}
-\subsection{Method \code{new()}}{
-Initialize a new channel.
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Channel$new(topic)}\if{html}{\out{</div>}}
+  \item{`topic`}{The topic string.}
+  \item{`process_id`}{The id of the process that owns the channel.}
+  \item{`random_id`}{A random 12-character string.}
+  \item{`directory_name`}{`{topic}_{random_id}_{process_id}`.}
+  \item{`directory_path`}{Full path of the channel directory.}
+  \item{`queue_path`}{Full path of the channel FIFO.}
+  \item{`state`}{An environment holding the open FIFO connection (the one
+    mutable part of the channel, so that [open()] and [close()] work on
+    every copy of the object).}
 }
 
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{topic}}{The topic string (dot-separated terms with optional
-wildcards).}
-}
-\if{html}{\out{</div>}}
-}
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-Channel-open"></a>}}
-\if{latex}{\out{\hypertarget{method-Channel-open}{}}}
-\subsection{Method \code{open()}}{
-Open the FIFO queue for reading in non-blocking mode.
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Channel$open()}\if{html}{\out{</div>}}
-}
-
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-Channel-close"></a>}}
-\if{latex}{\out{\hypertarget{method-Channel-close}{}}}
-\subsection{Method \code{close()}}{
-Close and clean up the channel by removing unconsumed
-  messages, the FIFO, and directory.
-
-This ensures that any undelivered messages are properly deleted when
-the channel is disposed, preventing resource leaks.
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Channel$close()}\if{html}{\out{</div>}}
-}
-
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-Channel-format"></a>}}
-\if{latex}{\out{\hypertarget{method-Channel-format}{}}}
-\subsection{Method \code{format()}}{
-Printable representation, like Python's `__str__`.
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Channel$format(...)}\if{html}{\out{</div>}}
-}
-
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{...}}{Ignored.}
-}
-\if{html}{\out{</div>}}
-}
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-Channel-repr"></a>}}
-\if{latex}{\out{\hypertarget{method-Channel-repr}{}}}
-\subsection{Method \code{repr()}}{
-Representation, like Python's `__repr__`.
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Channel$repr()}\if{html}{\out{</div>}}
-}
-
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-Channel-print"></a>}}
-\if{latex}{\out{\hypertarget{method-Channel-print}{}}}
-\subsection{Method \code{print()}}{
-Print the channel.
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Channel$print(...)}\if{html}{\out{</div>}}
-}
-
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{...}}{Ignored.}
-}
-\if{html}{\out{</div>}}
-}
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-Channel-clone"></a>}}
-\if{latex}{\out{\hypertarget{method-Channel-clone}{}}}
-\subsection{Method \code{clone()}}{
-The objects of this class are cloneable with this method.
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Channel$clone(deep = FALSE)}\if{html}{\out{</div>}}
-}
-
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{deep}}{Whether to make a deep clone.}
-}
-\if{html}{\out{</div>}}
-}
-}
+Methods: `open(channel)` opens the FIFO for reading in non-blocking mode,
+`close(channel)` closes it and removes the channel directory with any
+unconsumed message, and `format()` / `print()` give a printable
+representation. Use [with_channel()] in place of Python's `with channel:`
+block. The Python static methods are [active_channel_paths()],
+[inactive_channel_paths()] and [cleanup_inactive_channels()].
 }

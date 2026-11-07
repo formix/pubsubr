@@ -12,11 +12,14 @@
 #' holds a non-blocking FIFO named `queue`, created and read with
 #' [base::fifo()].
 #'
-#' Topic format supports wildcards:
+#' Topics are dot-separated words, none of them empty or blank. Wildcards are
+#' supported, each one standing alone as a whole word:
 #' \itemize{
-#'   \item `=` for single word wildcard
-#'   \item `+` for multiple words wildcard
+#'   \item `=` matches exactly one word
+#'   \item `+` matches one or more words, or zero or more words when it is the
+#'     last word of the topic
 #' }
+#' A `+` cannot be directly next to an `=` or to another `+`.
 #'
 #' Elements of the list:
 #' \describe{
@@ -36,15 +39,14 @@
 #' unconsumed message, and `format()` / `print()` give a printable
 #' representation. Use [with_channel()] in place of Python's `with channel:`
 #' block. The Python static methods are [active_channel_paths()],
-#' [inactive_channel_paths()], [matching_active_channel_paths()] and
-#' [cleanup_inactive_channels()].
+#' [inactive_channel_paths()] and [cleanup_inactive_channels()].
 #'
 #' @param topic The topic string (dot-separated terms with optional
 #'   wildcards).
 #' @return A list of class `"Channel"`.
 #' @export
 Channel <- function(topic) {
-  .validate_topic(topic)
+  .validate_topic_pattern(topic)
   process_id <- Sys.getpid()
   random_id <- .generate_random_id()
   directory_name <- sprintf("%s_%s_%d", topic, random_id, process_id)
@@ -193,12 +195,46 @@ print.Channel <- function(x, ...) {
 
 # ------------------------------------------------------ static functions
 
-# Validate that topic contains only allowed characters.
+# The dot-separated words of a topic, keeping the empty words that strsplit()
+# drops at the end ("a." has two words, like in Python).
+.topic_words <- function(topic) {
+  if (!nzchar(topic)) {
+    return("")
+  }
+  words <- strsplit(topic, ".", fixed = TRUE)[[1]]
+  if (endsWith(topic, ".")) {
+    words <- c(words, "")
+  }
+  words
+}
+
+# Whether a dot-separated word of the topic is empty or only whitespace.
+.has_blank_word <- function(topic) {
+  words <- .topic_words(topic)
+  any(!nzchar(trimws(words, whitespace = "[\\h\\v]")))
+}
+
+.blank_words_message <- function(topic) {
+  sprintf(
+    paste0("Topic '%s' cannot contain empty or blank words ",
+           "(leading, trailing or consecutive dots, or whitespace-only words)."),
+    topic
+  )
+}
+
+# Validate the topic pattern of a channel.
 #
 # Valid characters: [a-zA-Z0-9+=.-]
-.validate_topic <- function(topic) {
+# The wildcards '=' and '+' must each be a whole dot-separated term, and a '+'
+# term cannot be directly next to an '=' or '+' term.
+.validate_topic_pattern <- function(topic) {
   if (is.null(topic) || length(topic) != 1L || is.na(topic) || !nzchar(topic)) {
     .raise("value_error", "Topic cannot be empty")
+  }
+
+  # Every dot-separated word must contain something other than whitespace
+  if (.has_blank_word(topic)) {
+    .raise("value_error", .blank_words_message(topic))
   }
 
   # Check for invalid characters using regex
@@ -210,6 +246,31 @@ print.Channel <- function(x, ...) {
              "Only [a-zA-Z0-9+=.-] are allowed."),
       topic, paste0("'", invalid_chars, "'", collapse = ", ")
     ))
+  }
+
+  # Wildcards must be alone between dots (e.g. 'a.=.b', never 'a.b=' or 'a.+b')
+  terms <- .topic_words(topic)
+  for (term in terms) {
+    if (grepl("[=+]", term) && !(term %in% c("=", "+"))) {
+      .raise("value_error", sprintf(
+        paste0("Topic '%s' has invalid wildcard usage in term '%s': ",
+               "'=' and '+' must be alone between dots."),
+        topic, term
+      ))
+    }
+  }
+
+  # '+' next to '=' (either order) or to another '+' is ambiguous
+  for (i in seq_len(length(terms) - 1L)) {
+    left <- terms[i]
+    right <- terms[i + 1L]
+    if ((left == "+" && right %in% c("=", "+")) || (left == "=" && right == "+")) {
+      .raise("value_error", sprintf(
+        paste0("Topic '%s' has invalid wildcard usage: '+' cannot be adjacent ",
+               "to '=' or to another '+'."),
+        topic
+      ))
+    }
   }
   invisible(NULL)
 }
@@ -294,10 +355,6 @@ cleanup_inactive_channels <- function() {
 #'
 #' `active_channel_paths()` only includes channels where the associated process
 #' is still running, `inactive_channel_paths()` those where it is not.
-#' `matching_active_channel_paths()` finds the active channel directories whose
-#' topic matches `topic`, converting wildcards to regex patterns: `=` becomes
-#' `[a-zA-Z0-9-]` (single word wildcard) and `+` becomes `[a-zA-Z0-9.-]*`
-#' (multiple words wildcard).
 #'
 #' @return A sorted character vector of directory paths.
 #' @export
@@ -309,24 +366,6 @@ active_channel_paths <- function() {
 #' @export
 inactive_channel_paths <- function() {
   .channel_paths(active = FALSE)
-}
-
-#' @rdname active_channel_paths
-#' @param topic The (wildcard-free) topic to match channels against.
-#' @export
-matching_active_channel_paths <- function(topic) {
-  matching_channels <- character(0)
-  for (item in active_channel_paths()) {
-    parts <- strsplit(basename(item), "_", fixed = TRUE)[[1]]
-    topic_pattern <- parts[1]
-    regex_pattern <- gsub("+", "[a-zA-Z0-9.-]*",
-                          gsub("=", "[a-zA-Z0-9-]", topic_pattern, fixed = TRUE),
-                          fixed = TRUE)
-    if (grepl(paste0("^(?:", regex_pattern, ")$"), topic, perl = TRUE)) {
-      matching_channels <- c(matching_channels, item)
-    }
-  }
-  matching_channels
 }
 
 #' Use a channel as a context manager

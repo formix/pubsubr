@@ -41,7 +41,7 @@ SIGINT reaches R code as a condition of class `interrupt`, caught with
 `tryCatch(..., interrupt = function(sig) ...)`. Base R cannot intercept
 SIGTERM: without the sigterm package it terminates the R process
 immediately, and the channel directory left behind is removed later by
-`Channel$cleanup_inactive()`. When the sigterm package is installed, it is
+[cleanup_inactive_channels()]. When the sigterm package is installed, it is
 loaded by `subscribe()`, which then polls `sigterm::has_sigterm_flag()`.
 Once sigterm is loaded, R no longer exits on SIGTERM, and the flag stays
 set: the program should exit after `subscribe()` returns -1.

@@ -8,7 +8,7 @@ publish(topic, data, headers = NULL)
 }
 \arguments{
 \item{topic}{The topic to publish to (only alphanumeric, dots, and hyphens
-allowed).}
+allowed, with no empty or blank word).}
 
 \item{data}{The message payload as a raw vector.}
 
@@ -18,9 +18,12 @@ logical, `NULL`) for metadata.}
 \value{
 The number of times the message was published in a channel.
 
-Errors have class `value_error` if the topic contains invalid characters
-(must be `[a-zA-Z0-9.-]`) and `type_error` if `data` is not a raw vector.
+Errors have class `value_error` if the topic has an empty or blank word or
+contains invalid characters (must be `[a-zA-Z0-9.-]`), `type_error` if
+`data` is not a raw vector, and `runtime_error` if the message id already
+exists (id collision), in the temporary directory or in a matching channel.
 }
 \description{
-Publish a message to a topic
+The message is delivered to every active channel whose topic matches `topic`
+(see [Channel()] for the wildcard rules).
 }

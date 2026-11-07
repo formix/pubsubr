@@ -8,14 +8,15 @@ test_that("message creation", {
 
   expect_equal(message$topic, topic)
   expect_equal(message$content, data)
-  expect_gt(message$id, 0)
+  expect_match(message$id, "^[0-9]+$")
+  expect_gt(nchar(message$id), 0)
 })
 
 test_that("message id uniqueness", {
   message1 <- Message(topic = "test", content = charToRaw("data1"))
   message2 <- Message(topic = "test", content = charToRaw("data2"))
 
-  # IDs should be unique (random bits ensure this even in same microsecond)
+  # IDs should be unique even when created within the same millisecond
   expect_false(message1$id == message2$id)
 })
 
@@ -175,7 +176,7 @@ hex_to_raw <- function(hex) {
 test_that("reads a message serialized by Python", {
   message <- message_from_bytes(hex_to_raw(python_fixture))
 
-  expect_equal(message$id, 1793808798292166)
+  expect_equal(message$id, "1793808798292166")
   expect_equal(message$timestamp, 1793808798299999)
   expect_equal(message$topic, "test.python.é")
   expect_equal(message$content, c(charToRaw("hello"), as.raw(0), charToRaw("world")))
@@ -193,7 +194,7 @@ test_that("writes the same bytes as Python", {
     content = c(charToRaw("hello"), as.raw(0), charToRaw("world")),
     headers = list(s = "é \"q\"", i = 42L, f = 3.14, b = TRUE, n = NULL)
   )
-  message$id <- 1793808798292166
+  message$id <- "1793808798292166"
   message$timestamp <- 1793808798299999
 
   expect_equal(message_to_bytes(message), hex_to_raw(python_fixture))
@@ -207,4 +208,71 @@ test_that("invalid magic number", {
 test_that("truncated message", {
   data <- message_to_bytes(Message(topic = "test", content = charToRaw("data")))
   expect_error(message_from_bytes(data[1:20]), "EOF", class = "value_error")
+})
+
+# ---------------------------------------------------------- message ids
+
+# Ids are strings of decimal digits, so they compare numerically by length
+# first, then lexically.
+is_increasing <- function(ids) {
+  identical(ids, ids[order(nchar(ids), ids)])
+}
+
+test_that("ids are unique and increasing in generation order", {
+  ids <- vapply(seq_len(20000), function(i) .next_id(), character(1))
+
+  expect_equal(length(unique(ids)), length(ids))
+  expect_true(is_increasing(ids))
+})
+
+test_that("id layout", {
+  before_ms <- floor(as.numeric(Sys.time()) * 1000)
+  id <- .next_id()
+  after_ms <- floor(as.numeric(Sys.time()) * 1000) + 1 # a burst may borrow the next millisecond
+
+  bytes <- as.integer(.id_to_bytes(id))
+  upper <- sum(bytes[1:4] * 256^(3:0))
+  lower <- sum(bytes[5:8] * 256^(3:0))
+  id_ms <- upper * 2^10 + floor(lower / 2^22)
+  id_process <- floor(lower / 2^12) %% 2^10
+
+  expect_gte(id_ms, before_ms)
+  expect_lte(id_ms, after_ms + 1)
+  expect_equal(id_process, Sys.getpid() %% 2^10)
+})
+
+test_that("ids keep increasing when the clock goes backwards", {
+  first <- .next_id()
+  first_bytes <- as.integer(.id_to_bytes(first))
+  first_ms <- sum(first_bytes[1:4] * 256^(3:0)) * 2^10 +
+    floor(sum(first_bytes[5:8] * 256^(3:0)) / 2^22)
+
+  local_mocked_bindings(.time_seconds = function() (first_ms - 5000) / 1000)
+  second <- .next_id()
+  third <- .next_id()
+
+  expect_true(is_increasing(c(first, second, third)))
+  expect_equal(length(unique(c(first, second, third))), 3)
+})
+
+test_that("sequence overflow moves to the next millisecond", {
+  frozen_ms <- floor(as.numeric(Sys.time()) * 1000) + 60000 # a fresh millisecond
+  local_mocked_bindings(.time_seconds = function() frozen_ms / 1000)
+
+  ids <- vapply(seq_len(2^12 * 2 + 10), function(i) .next_id(), character(1))
+
+  expect_equal(length(unique(ids)), length(ids))
+  expect_true(is_increasing(ids))
+  milliseconds <- vapply(ids, function(id) {
+    b <- as.integer(.id_to_bytes(id))
+    sum(b[1:4] * 256^(3:0)) * 2^10 + floor(sum(b[5:8] * 256^(3:0)) / 2^22)
+  }, numeric(1))
+  expect_equal(length(unique(milliseconds)), 3) # 4096 ids per ms, so 8202 ids span 3 ms
+})
+
+test_that("ids use the full 64 bits without loss", {
+  max_id <- "18446744073709551615"
+  expect_equal(.id_from_bytes(.id_to_bytes(max_id)), max_id)
+  expect_equal(.id_from_bytes(.id_to_bytes("9007199254740993")), "9007199254740993")
+  expect_error(.id_to_bytes("18446744073709551616"), class = "value_error")
 })

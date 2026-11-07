@@ -634,3 +634,241 @@ test_that("mixed topics no crosstalk", {
   expect_equal(received1[[1]]$content, "for topic 1")
   expect_equal(received2[[1]]$content, "for topic 2")
 })
+
+# ------------------------------------------------ wildcard publishing
+
+test_that("publish with whole word wildcard match", {
+  channel <- Channel(topic = "test.publish.eq.=")
+
+  with_channel(channel, {
+    data <- charToRaw("whole word wildcard message")
+    matched_topic <- "test.publish.eq.item77"
+    expect_equal(publish(matched_topic, data), 1)
+
+    message <- fetch(channel)
+    expect_false(is.null(message))
+    expect_equal(message$content, data)
+    expect_equal(message$topic, matched_topic)
+
+    expect_equal(publish("test.publish.eq.item.77", data), 0)
+    expect_null(fetch(channel))
+  })
+})
+
+test_that("publish with combined wildcard match", {
+  channel <- Channel(topic = "test.publish.combined.=.tail.+")
+
+  with_channel(channel, {
+    data <- charToRaw("combined wildcard message")
+    matched_topic <- "test.publish.combined.x.tail.more"
+    expect_equal(publish(matched_topic, data), 1)
+
+    message <- fetch(channel)
+    expect_equal(message$content, data)
+    expect_equal(message$topic, matched_topic)
+
+    # '=' matches a whole word, but never several words
+    expect_equal(publish("test.publish.combined.xy.tail.more", data), 1)
+    expect_false(is.null(fetch(channel)))
+    expect_equal(publish("test.publish.combined.x.y.tail.more", data), 0)
+    # a trailing '+' also matches zero words
+    expect_equal(publish("test.publish.combined.x.tail", data), 1)
+    expect_false(is.null(fetch(channel)))
+    expect_null(fetch(channel))
+  })
+})
+
+test_that("publish reaches two wildcard channels", {
+  channel_plus <- Channel(topic = "test.publish.multi.+")
+  channel_eq <- Channel(topic = "test.publish.multi.=")
+
+  with_channel(channel_plus, with_channel(channel_eq, {
+    data <- charToRaw("multi wildcard message")
+    topic <- "test.publish.multi.item"
+    expect_equal(publish(topic, data), 2)
+
+    for (channel in list(channel_plus, channel_eq)) {
+      message <- fetch(channel)
+      expect_false(is.null(message))
+      expect_equal(message$content, data)
+      expect_equal(message$topic, topic)
+    }
+
+    # A multi-word topic matches only the + channel ('=' is a single word).
+    expect_equal(publish("test.publish.multi.a.b", data), 1)
+    expect_false(is.null(fetch(channel_plus)))
+    expect_null(fetch(channel_eq))
+  }))
+})
+
+test_that("publish with empty or blank words", {
+  for (topic in c("", " ", "   ", ".", ".a", "a.", "a..b", "a. .b", "a.  ")) {
+    expect_error(publish(topic, charToRaw("test data")), class = "value_error")
+  }
+})
+
+# --------------------------------------------------- id collisions
+
+test_that("publish raises when the message id collides in a channel", {
+  topic <- "test.publish.collision"
+  channel <- Channel(topic = topic)
+  fixed_id <- "1000000000000000"
+  local_mocked_bindings(.next_id = function() fixed_id)
+
+  with_channel(channel, {
+    expect_equal(publish(topic, charToRaw("first")), 1)
+
+    # Same id again while the first message is still in the channel
+    err <- expect_error(publish(topic, charToRaw("second")), class = "runtime_error")
+    expect_match(tolower(conditionMessage(err)), "collision", fixed = TRUE)
+    # temporary file is cleaned up
+    expect_false(file.exists(file.path(get_base_dir(), "tmp", fixed_id)))
+
+    # The first message is untouched and nothing else was delivered
+    message <- fetch(channel)
+    expect_false(is.null(message))
+    expect_equal(message$content, charToRaw("first"))
+    expect_equal(message$id, fixed_id)
+    expect_null(fetch(channel))
+  })
+})
+
+test_that("publish raises when the temporary message file already exists", {
+  topic <- "test.publish.tmpcollision"
+  channel <- Channel(topic = topic)
+  fixed_id <- "1000000000000001"
+  tmp_dir <- file.path(get_base_dir(), "tmp")
+  dir.create(tmp_dir, recursive = TRUE, showWarnings = FALSE)
+  existing <- file.path(tmp_dir, fixed_id) # as if another process is publishing this id
+  writeBin(charToRaw("other publisher"), existing)
+  withr::defer(unlink(existing))
+  local_mocked_bindings(.next_id = function() fixed_id)
+
+  with_channel(channel, {
+    err <- expect_error(publish(topic, charToRaw("data")), class = "runtime_error")
+    expect_match(tolower(conditionMessage(err)), "collision", fixed = TRUE)
+    expect_equal(rawToChar(readBin(existing, "raw", 100)), "other publisher") # not touched
+    expect_null(fetch(channel))
+  })
+})
+
+# ------------------------------------------------------ is_matching
+
+test_that("is_matching exact", {
+  expect_true(.is_matching("a.b.c", "a.b.c"))
+  expect_false(.is_matching("a.b.c", "a.b"))
+  expect_false(.is_matching("a.b", "a.b.c"))
+  expect_false(.is_matching("a.b.c", "a.b.d"))
+})
+
+test_that("is_matching has no partial word match", {
+  expect_false(.is_matching("abc", "ab"))
+  expect_false(.is_matching("ab", "abc"))
+})
+
+test_that("is_matching single word wildcard", {
+  expect_true(.is_matching("=", "a"))
+  expect_true(.is_matching("a.=.c", "a.bcd.c"))
+  expect_true(.is_matching("=.=", "a.b"))
+  expect_false(.is_matching("=", "a.b"))
+  expect_false(.is_matching("a.=", "a"))
+  expect_false(.is_matching("a.=.c", "a.b.d"))
+})
+
+test_that("is_matching multi word wildcard", {
+  expect_true(.is_matching("+", "a"))
+  expect_true(.is_matching("+", "a.b.c"))
+  expect_true(.is_matching("a.+", "a.b"))
+  expect_true(.is_matching("a.+", "a.b.c.d"))
+  expect_true(.is_matching("a.+", "a")) # a trailing + also matches zero words
+  expect_false(.is_matching("a.+", "b.c"))
+})
+
+test_that("is_matching multi word wildcard in the middle", {
+  expect_true(.is_matching("a.+.z", "a.b.z"))
+  expect_true(.is_matching("a.+.z", "a.b.c.z"))
+  expect_true(.is_matching("a.+.z", "a.z.z"))
+  expect_false(.is_matching("a.+.z", "a.z")) # + needs one word
+  expect_false(.is_matching("a.+.z", "a.b.c"))
+})
+
+test_that("is_matching combined wildcards", {
+  expect_true(.is_matching("a.=.c.+", "a.b.c.d"))
+  expect_true(.is_matching("a.=.c.+", "a.b.c.d.e"))
+  expect_true(.is_matching("a.=.c.+", "a.b.c"))
+  expect_false(.is_matching("a.=.c.+", "a.c"))
+  expect_true(.is_matching("+.b.=", "a.b.c"))
+  expect_true(.is_matching("+.b", "a.b"))
+  expect_false(.is_matching("+.b", "b"))
+  expect_false(.is_matching("+.b", "a"))
+})
+
+test_that("is_matching middle plus needs a word but trailing plus does not", {
+  expect_false(.is_matching("a.+.z", "a.z"))
+  expect_false(.is_matching("+.z", "z"))
+  expect_true(.is_matching("a.+", "a"))
+  expect_true(.is_matching("+", "a"))
+  expect_true(.is_matching("a.=.+", "a.b"))
+  expect_false(.is_matching("a.=.+", "a"))
+  expect_true(.is_matching("a.+.z.+", "a.b.z"))
+  expect_false(.is_matching("a.+.z.+", "a.z"))
+})
+
+test_that("is_matching with realistic words", {
+  # exact
+  expect_true(.is_matching("orders.created", "orders.created"))
+  expect_false(.is_matching("orders.created", "orders.deleted"))
+  expect_false(.is_matching("orders.created", "orders.created.eu"))
+  expect_false(.is_matching("orders", "order"))
+  expect_false(.is_matching("order", "orders"))
+
+  # '=' matches exactly one whole word
+  expect_true(.is_matching("orders.=.created", "orders.eu-west.created"))
+  expect_true(.is_matching("=.created", "orders.created"))
+  expect_false(.is_matching("orders.=.created", "orders.created"))
+  expect_false(.is_matching("orders.=.created", "orders.eu.west.created"))
+  expect_false(.is_matching("orders.=", "orders"))
+
+  # trailing '+' matches zero or more words
+  expect_true(.is_matching("logs.+", "logs"))
+  expect_true(.is_matching("logs.+", "logs.app"))
+  expect_true(.is_matching("logs.+", "logs.app.server1.error"))
+  expect_false(.is_matching("logs.+", "metrics.app"))
+  expect_false(.is_matching("logs.+", "logsapp.error"))
+
+  # '+' in the middle matches one or more words
+  expect_true(.is_matching("logs.+.error", "logs.app.error"))
+  expect_true(.is_matching("logs.+.error", "logs.app.server1.error"))
+  expect_true(.is_matching("logs.+.error", "logs.error.error"))
+  expect_false(.is_matching("logs.+.error", "logs.error"))
+  expect_false(.is_matching("logs.+.error", "logs.app.warning"))
+  expect_false(.is_matching("logs.+.error", "logs.error.app"))
+
+  # '+' at the start
+  expect_true(.is_matching("+.error", "app.server1.error"))
+  expect_false(.is_matching("+.error", "error"))
+
+  # combinations
+  expect_true(.is_matching("orders.=.+", "orders.eu"))
+  expect_true(.is_matching("orders.=.+", "orders.eu.created.late"))
+  expect_false(.is_matching("orders.=.+", "orders"))
+  expect_true(.is_matching("+.payment.=", "shop.eu.payment.accepted"))
+  expect_true(.is_matching("+.payment.=.done", "shop.payment.payment.payment.done"))
+  expect_true(.is_matching("shop.+.payment.=.+", "shop.eu.payment.accepted"))
+  expect_true(.is_matching("shop.+.payment.=.+", "shop.eu.fr.payment.accepted.late.now"))
+  expect_false(.is_matching("shop.+.payment.=.+", "shop.payment.accepted"))
+  expect_false(.is_matching("shop.+.payment.=.+", "shop.eu.payment"))
+
+  # hyphens and digits are part of words
+  expect_true(.is_matching("sensor-1.=.temp-c", "sensor-1.room-42.temp-c"))
+  expect_false(.is_matching("sensor-1.=.temp-c", "sensor-2.room-42.temp-c"))
+})
+
+test_that("is_matching multi word wildcard backtracks", {
+  expect_true(.is_matching("a.+.z", "a.b.z.z"))
+  expect_true(.is_matching("+.b.+.d", "x.b.b.c.b.d.d"))
+  expect_true(.is_matching("+.z", "z.z.z"))
+  expect_true(.is_matching("+.b.+", "x.b")) # trailing + matches zero words
+  expect_false(.is_matching("+.b.+.d", "x.b.c"))
+  expect_false(.is_matching("a.+.z", "a.b.z.y"))
+})

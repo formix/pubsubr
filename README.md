@@ -182,8 +182,10 @@ Either side can be swapped for the Python version from the formix-pubsub README.
 
 | Wildcard | Matches | Example |
 |----------|---------|---------|
-| `=` | Exactly one word | `logs.=` matches `logs.info`, `logs.error` but not `logs.app.info` |
-| `+` | One or more words | `logs.+` matches `logs.info`, `logs.error`, and `logs.app.info` |
+| `=` | Exactly one word | `logs.=` matches `logs.info`, `logs.error` but not `logs.app.info` or `logs` |
+| `+` | One or more words, or zero or more words when it is the last word | `logs.+` matches `logs`, `logs.info` and `logs.app.info`; `logs.+.error` matches `logs.app.error` but not `logs.error` |
+
+Topics are dot-separated words, none of them empty or blank. A wildcard must be a whole word (`logs.=`, never `logs.err=` or `logs.+x`), and a `+` cannot be directly next to an `=` or to another `+`.
 
 ```r
 channel <- Channel(topic = "logs.+")
@@ -236,8 +238,8 @@ KillSignal=SIGINT
 - `publish(topic, data, headers = NULL)`: publish a raw vector to all channels matching `topic`. Returns the number of channels that received the message.
 - `fetch(channel)`: fetch the next message without blocking. Returns `NULL` if the queue is empty.
 - `subscribe(channel, callback, timeout_seconds = 0)`: deliver messages to `callback` as they arrive (0 = listen indefinitely). Returns the number of messages processed, or -1 if stopped by a signal (see [Signals](#signals)).
-- `Channel(topic)`: a subscription endpoint, returned as an S3 object: a list of class `Channel` with elements `topic`, `process_id`, `random_id`, `directory_name`, `directory_path`, `queue_path` and `state`. Use `open(channel)` / `close(channel)`, or `with_channel(channel, { ... })` to ensure cleanup. Related functions: `active_channel_paths()`, `inactive_channel_paths()`, `matching_active_channel_paths(topic)`, `cleanup_inactive_channels()`.
-- `Message(topic, content, headers = NULL)`: an S3 object, a list with elements `id`, `timestamp` (microseconds), `topic`, `content` (raw vector) and `headers` (named list). `message_to_bytes(msg)` and `message_from_bytes(data)` serialize and deserialize; `write_message(msg, stream)` and `read_message(stream)` do the same on binary connections.
+- `Channel(topic)`: a subscription endpoint, returned as an S3 object: a list of class `Channel` with elements `topic`, `process_id`, `random_id`, `directory_name`, `directory_path`, `queue_path` and `state`. Use `open(channel)` / `close(channel)`, or `with_channel(channel, { ... })` to ensure cleanup. Related functions: `active_channel_paths()`, `inactive_channel_paths()`, `cleanup_inactive_channels()`.
+- `Message(topic, content, headers = NULL)`: an S3 object, a list with elements `id` (a string of decimal digits), `timestamp` (microseconds), `topic`, `content` (raw vector) and `headers` (named list). `message_to_bytes(msg)` and `message_from_bytes(data)` serialize and deserialize; `write_message(msg, stream)` and `read_message(stream)` do the same on binary connections.
 
 ## Differences from the Python version
 
@@ -249,7 +251,8 @@ KillSignal=SIGINT
 | `Channel.active_paths()` | `active_channel_paths()` |
 | `ValueError`, `RuntimeError`, `TypeError`, `OSError` | conditions of class `value_error`, `runtime_error`, `type_error`, `os_error` |
 | `logging` | `message()` on stderr, filtered by the `pubsubr.log_level` option |
-| 64-bit integer ids | doubles, exact up to 2^53 (current microsecond timestamps are around 2^51) |
+| 64-bit integer ids | strings of decimal digits, since ids use up to 63 bits and doubles are exact only up to 2^53 |
+| 64-bit integer timestamps | doubles, exact up to 2^53 (current microsecond timestamps are around 2^51) |
 | SIGTERM and SIGINT handled by `subscribe()` | SIGINT as an R `interrupt` condition; SIGTERM only with the optional sigterm package |
 | threads / `multiprocessing` in tests | forked processes with `parallel::mcparallel` |
 

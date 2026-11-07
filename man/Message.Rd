@@ -2,167 +2,63 @@
 % Please edit documentation in R/message.R
 \name{Message}
 \alias{Message}
+\alias{format.Message}
+\alias{print.Message}
 \title{Message}
-\description{
-Message
+\usage{
+Message(topic, content, headers = NULL)
 
-Message
+\method{format}{Message}(x, ...)
+
+\method{print}{Message}(x, ...)
+}
+\arguments{
+\item{topic}{The topic this message belongs to.}
+
+\item{content}{The message payload as a raw vector.}
+
+\item{headers}{Optional named list of scalar values for metadata.}
+
+\item{x}{A `Message`.}
+
+\item{...}{Ignored.}
+}
+\value{
+A list of class `"Message"` with elements:
+\describe{
+  \item{`id`}{Unique message identifier (time-based, a string of decimal
+    digits).}
+  \item{`timestamp`}{Microseconds since the epoch (numeric).}
+  \item{`topic`}{The topic this message belongs to.}
+  \item{`content`}{The message payload as a raw vector.}
+  \item{`headers`}{Named list of metadata.}
+}
+}
+\description{
+Creates a message in the pubsub system, as an old-style (S3) object: a list
+of class `"Message"` with the elements `id`, `timestamp`, `topic`, `content`
+and `headers`.
 }
 \details{
-Represents a message in the pubsub system.
+Message ids and timestamps are 64-bit unsigned integers on the wire.
+Timestamps are microseconds since the epoch and are stored as doubles, which
+represent integers exactly up to 2^53. Ids use almost all 64 bits (see
+below), more than a double can hold exactly, so an id is stored as a string
+of decimal digits, which is also the name of the message file on disk.
 
-Message ids and timestamps are 64-bit unsigned integers on the wire. In R
-they are stored as doubles, which represent integers exactly up to 2^53;
-microseconds since the epoch stay well below that limit.
+An id is unique and increases in generation order. Its layout, from the most
+to the least significant bits, is 42 bits of milliseconds since the epoch,
+10 bits with the lowest bits of the process id, and 12 bits of sequence
+number restarted for every new millisecond. If more than 4096 ids are needed
+within one millisecond, the generator moves on to the next millisecond
+without waiting. Ids from different processes can only collide if their
+process ids share the same 10 low bits and they generate an id in the same
+millisecond with the same sequence number.
 
 Headers are a named list of scalar values: character, numeric, logical or
 `NULL`. They are serialized as a JSON object.
 
-The Python class methods are available on the class generator:
-`Message$read(stream)` reads a message from a binary connection and
-`Message$from_bytes(data)` deserializes a raw vector.
-}
-\section{Public fields}{
-\if{html}{\out{<div class="r6-fields">}}
-\describe{
-\item{\code{id}}{Unique message identifier (time-based, numeric).}
-
-\item{\code{timestamp}}{Microseconds since the epoch (numeric).}
-
-\item{\code{topic}}{The topic this message belongs to.}
-
-\item{\code{content}}{The message payload as a raw vector.}
-
-\item{\code{headers}}{Named list of metadata.}
-}
-\if{html}{\out{</div>}}
-}
-\section{Methods}{
-\subsection{Public methods}{
-\itemize{
-\item \href{#method-Message-new}{\code{Message$new()}}
-\item \href{#method-Message-write}{\code{Message$write()}}
-\item \href{#method-Message-to_bytes}{\code{Message$to_bytes()}}
-\item \href{#method-Message-print}{\code{Message$print()}}
-\item \href{#method-Message-format}{\code{Message$format()}}
-\item \href{#method-Message-clone}{\code{Message$clone()}}
-}
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-Message-new"></a>}}
-\if{latex}{\out{\hypertarget{method-Message-new}{}}}
-\subsection{Method \code{new()}}{
-Initialize a new message.
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Message$new(topic, content, headers = NULL)}\if{html}{\out{</div>}}
-}
-
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{topic}}{The topic this message belongs to.}
-
-\item{\code{content}}{The message payload as a raw vector.}
-
-\item{\code{headers}}{Optional named list of scalar values for metadata.}
-}
-\if{html}{\out{</div>}}
-}
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-Message-write"></a>}}
-\if{latex}{\out{\hypertarget{method-Message-write}{}}}
-\subsection{Method \code{write()}}{
-Write the message to a binary connection.
-
-Binary format:
-\itemize{
-  \item 4 bytes: magic number (0x504D5347 - "PMSG")
-  \item 1 byte: format version (uint8)
-  \item 8 bytes: id (uint64)
-  \item 8 bytes: timestamp (uint64, microseconds since epoch)
-  \item 4 bytes: topic length (uint32)
-  \item N bytes: topic (UTF-8 encoded)
-  \item 4 bytes: headers JSON length (uint32)
-  \item N bytes: headers as JSON string (UTF-8 encoded)
-  \item 4 bytes: content length (uint32)
-  \item N bytes: content
-}
-All integers are big-endian.
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Message$write(stream)}\if{html}{\out{</div>}}
-}
-
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{stream}}{Binary connection to write to.}
-}
-\if{html}{\out{</div>}}
-}
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-Message-to_bytes"></a>}}
-\if{latex}{\out{\hypertarget{method-Message-to_bytes}{}}}
-\subsection{Method \code{to_bytes()}}{
-Convenience method to serialize message to bytes.
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Message$to_bytes()}\if{html}{\out{</div>}}
-}
-
-\subsection{Returns}{
-The serialized message as a raw vector.
-}
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-Message-print"></a>}}
-\if{latex}{\out{\hypertarget{method-Message-print}{}}}
-\subsection{Method \code{print()}}{
-Printable representation.
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Message$print(...)}\if{html}{\out{</div>}}
-}
-
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{...}}{Ignored.}
-}
-\if{html}{\out{</div>}}
-}
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-Message-format"></a>}}
-\if{latex}{\out{\hypertarget{method-Message-format}{}}}
-\subsection{Method \code{format()}}{
-Text representation, like Python's `__repr__`.
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Message$format(...)}\if{html}{\out{</div>}}
-}
-
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{...}}{Ignored.}
-}
-\if{html}{\out{</div>}}
-}
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-Message-clone"></a>}}
-\if{latex}{\out{\hypertarget{method-Message-clone}{}}}
-\subsection{Method \code{clone()}}{
-The objects of this class are cloneable with this method.
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Message$clone(deep = FALSE)}\if{html}{\out{</div>}}
-}
-
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{deep}}{Whether to make a deep clone.}
-}
-\if{html}{\out{</div>}}
-}
-}
+Messages are read with [read_message()] from a binary connection and
+deserialized from a raw vector with [message_from_bytes()]. They are
+written with [write_message()] and serialized with [message_to_bytes()].
 }
