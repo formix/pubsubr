@@ -7,7 +7,7 @@
 
 test_that("publish to exact match", {
   topic <- "test.publish.exact"
-  channel <- Channel$new(topic = topic)
+  channel <- Channel(topic = topic)
 
   with_channel(channel, {
     data <- charToRaw("test message")
@@ -22,9 +22,9 @@ test_that("publish to exact match", {
 
 test_that("publish to multiple channels", {
   topic <- "test.publish.multi"
-  channel1 <- Channel$new(topic = topic)
-  channel2 <- Channel$new(topic = topic)
-  channel3 <- Channel$new(topic = topic)
+  channel1 <- Channel(topic = topic)
+  channel2 <- Channel(topic = topic)
+  channel3 <- Channel(topic = topic)
 
   with_channel(channel1, with_channel(channel2, with_channel(channel3, {
     data <- charToRaw("broadcast message")
@@ -41,7 +41,7 @@ test_that("publish to multiple channels", {
 
 test_that("publish with wildcard match", {
   wildcard_topic <- "test.publish.wc.+"
-  channel <- Channel$new(topic = wildcard_topic)
+  channel <- Channel(topic = wildcard_topic)
 
   with_channel(channel, {
     data <- charToRaw("wildcard message")
@@ -64,7 +64,7 @@ test_that("publish no matching channels", {
 
 test_that("publish empty data", {
   topic <- "test.empty"
-  channel <- Channel$new(topic = topic)
+  channel <- Channel(topic = topic)
 
   count <- with_channel(channel, {
     data <- raw(0)
@@ -76,7 +76,7 @@ test_that("publish empty data", {
 
 test_that("publish large data", {
   topic <- "test.large"
-  channel <- Channel$new(topic = topic)
+  channel <- Channel(topic = topic)
 
   with_channel(channel, {
     data <- rep(charToRaw("x"), 1024 * 1024) # 1MB
@@ -94,7 +94,7 @@ test_that("publish unicode topic", {
   topic <- "test.unicode.тест"
 
   # Should raise value_error due to invalid characters
-  err <- expect_error(Channel$new(topic = topic), class = "value_error")
+  err <- expect_error(Channel(topic = topic), class = "value_error")
   expect_match(tolower(conditionMessage(err)), "invalid characters", fixed = TRUE)
 })
 
@@ -120,7 +120,7 @@ test_that("publish with wildcard plus", {
 
 test_that("publish with headers", {
   topic <- "test.publish.headers"
-  channel <- Channel$new(topic = topic)
+  channel <- Channel(topic = topic)
   headers <- list(
     "str-key" = "value",
     "int-key" = 42L,
@@ -146,7 +146,7 @@ test_that("publish with headers", {
 
 test_that("publish with none headers", {
   topic <- "test.publish.none.headers"
-  channel <- Channel$new(topic = topic)
+  channel <- Channel(topic = topic)
 
   with_channel(channel, {
     count <- publish(topic, charToRaw("data"), headers = NULL)
@@ -163,7 +163,7 @@ test_that("publish with none headers", {
 
 test_that("fetch single message", {
   topic <- "test.fetch.single"
-  channel <- Channel$new(topic = topic)
+  channel <- Channel(topic = topic)
   with_channel(channel, {
     # Publish a message
     data <- charToRaw("fetch me")
@@ -181,7 +181,7 @@ test_that("fetch single message", {
 
 test_that("fetch no message", {
   topic <- "test.fetch.empty"
-  channel <- Channel$new(topic = topic)
+  channel <- Channel(topic = topic)
 
   with_channel(channel, {
     # Don't publish anything
@@ -193,7 +193,7 @@ test_that("fetch no message", {
 
 test_that("fetch multiple messages", {
   topic <- "test.fetch.multiple"
-  channel <- Channel$new(topic = topic)
+  channel <- Channel(topic = topic)
 
   with_channel(channel, {
     # Publish multiple messages
@@ -224,7 +224,7 @@ test_that("fetch multiple messages", {
 
 test_that("fetch removes message file", {
   topic <- "test.fetch.cleanup"
-  channel <- Channel$new(topic = topic)
+  channel <- Channel(topic = topic)
 
   with_channel(channel, {
     # Publish a message
@@ -245,7 +245,7 @@ test_that("fetch removes message file", {
 
 test_that("fetch preserves id and timestamp", {
   topic <- "test.fetch.attrs"
-  channel <- Channel$new(topic = topic)
+  channel <- Channel(topic = topic)
 
   with_channel(channel, {
     before <- now_micro()
@@ -263,7 +263,7 @@ test_that("fetch preserves id and timestamp", {
 
 test_that("fetch with empty content", {
   topic <- "test.fetch.empty.content"
-  channel <- Channel$new(topic = topic)
+  channel <- Channel(topic = topic)
 
   with_channel(channel, {
     # Publish empty message
@@ -279,9 +279,9 @@ test_that("fetch with empty content", {
 
 test_that("fetch on closed channel", {
   topic <- "test.fetch.closed"
-  channel <- Channel$new(topic = topic)
-  channel$open()
-  channel$close()
+  channel <- Channel(topic = topic)
+  open(channel)
+  close(channel)
 
   expect_error(fetch(channel), class = "runtime_error")
 })
@@ -291,7 +291,7 @@ test_that("fetch on closed channel", {
 test_that("subscribe receives messages", {
   skip_if_no_fork()
   topic <- "test.subscribe.receive"
-  channel <- Channel$new(topic = topic)
+  channel <- Channel(topic = topic)
   received_messages <- list()
 
   with_channel(channel, {
@@ -321,7 +321,7 @@ test_that("subscribe receives messages", {
 
 test_that("subscribe timeout", {
   topic <- "test.subscribe.timeout"
-  channel <- Channel$new(topic = topic)
+  channel <- Channel(topic = topic)
   received_messages <- list()
 
   with_channel(channel, {
@@ -341,10 +341,10 @@ test_that("subscribe timeout", {
 
 test_that("subscribe negative timeout", {
   topic <- "test.subscribe.negative"
-  channel <- Channel$new(topic = topic)
+  channel <- Channel(topic = topic)
   withr::defer({
-    channel$open()
-    channel$close()
+    open(channel)
+    close(channel)
   })
 
   callback <- function(message) NULL
@@ -359,7 +359,7 @@ test_that("subscribe callback exception", {
 
   # Subprocess that subscribes with callback that raises an error.
   sub_proc <- start_child({
-    channel <- Channel$new(topic = topic)
+    channel <- Channel(topic = topic)
     received <- character(0)
     call_count <- 0
 
@@ -395,9 +395,9 @@ test_that("subscribe callback exception", {
 
 test_that("subscribe on closed channel", {
   topic <- "test.subscribe.closed"
-  channel <- Channel$new(topic = topic)
-  channel$open()
-  channel$close()
+  channel <- Channel(topic = topic)
+  open(channel)
+  close(channel)
 
   expect_error(subscribe(channel, function(msg) NULL, timeout_seconds = 0.1),
                class = "runtime_error")
@@ -409,7 +409,7 @@ test_that("subscribe returns -1 on SIGINT", {
   topic <- "test.subscribe.sigterm"
 
   sub_proc <- start_child({
-    channel <- Channel$new(topic = topic)
+    channel <- Channel(topic = topic)
     with_channel(channel, subscribe(channel, function(message) NULL))
   })
 
@@ -428,7 +428,7 @@ test_that("subscribe returns -1 on SIGTERM with the sigterm package", {
   topic <- "test.subscribe.sigterm"
 
   sub_proc <- start_child({
-    channel <- Channel$new(topic = topic)
+    channel <- Channel(topic = topic)
     with_channel(channel, subscribe(channel, function(message) NULL))
   })
 
@@ -447,7 +447,7 @@ test_that("pub sub flow", {
 
   # Subprocess that subscribes and reports results.
   sub_proc <- start_child({
-    channel <- Channel$new(topic = topic)
+    channel <- Channel(topic = topic)
     received <- list()
 
     with_channel(channel, {
@@ -483,7 +483,7 @@ test_that("multiple subscribers", {
   # Subprocess that subscribes and reports results.
   subscriber_process <- function(topic, subscriber_id) {
     start_child({
-      channel <- Channel$new(topic = topic)
+      channel <- Channel(topic = topic)
       received <- character(0)
 
       with_channel(channel, {
@@ -525,7 +525,7 @@ test_that("message order", {
 
   # Subprocess that subscribes and reports results in order.
   sub_proc <- start_child({
-    channel <- Channel$new(topic = topic)
+    channel <- Channel(topic = topic)
     received <- character(0)
 
     with_channel(channel, {
@@ -558,7 +558,7 @@ test_that("message order", {
 
 test_that("publish none data raises", {
   topic <- "test.integration.none"
-  channel <- Channel$new(topic = topic)
+  channel <- Channel(topic = topic)
 
   with_channel(channel, {
     expect_error(publish(topic, NULL), class = "type_error")
@@ -567,7 +567,7 @@ test_that("publish none data raises", {
 
 test_that("publish before subscribe", {
   topic <- "test.integration.prebuffer"
-  channel <- Channel$new(topic = topic)
+  channel <- Channel(topic = topic)
 
   with_channel(channel, {
     # Publish messages BEFORE subscribing
@@ -598,7 +598,7 @@ test_that("mixed topics no crosstalk", {
   # Subprocess that subscribes and reports results.
   subscriber_process <- function(topic, topic_id) {
     start_child({
-      channel <- Channel$new(topic = topic)
+      channel <- Channel(topic = topic)
       received <- list()
 
       with_channel(channel, {

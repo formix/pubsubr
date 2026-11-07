@@ -14,7 +14,7 @@ same machine can publish and subscribe to each other**.
 Unlike traditional pub/sub systems (Redis, RabbitMQ, ZeroMQ), **pubsubr requires no broker, no server process, and no external service**. Messages are routed through kernel FIFO named pipes and stored on the shared-memory filesystem (`/dev/shm` on Linux), making communication fast and entirely local.
 
 - **No infrastructure**: install and use, nothing to start or configure
-- **Pure R**: no compiled code; FIFOs use base R `fifo()` connections. Dependencies are `R6` and `jsonlite`
+- **Pure R**: no compiled code; FIFOs use base R `fifo()` connections. Its only dependency is `jsonlite`
 - **Automatic cleanup**: channels are tied to process IDs; stale channels from crashed processes are detected and cleaned up automatically
 - **Messages persist until consumed**: published messages are stored as files and delivered to all matching subscribers
 
@@ -43,7 +43,7 @@ remotes::install_github("atheriel/sigterm")
 ```r
 library(pubsubr)
 
-channel <- Channel$new(topic = "greetings")
+channel <- Channel(topic = "greetings")
 
 with_channel(channel, {
   on_message <- function(msg) {
@@ -80,7 +80,7 @@ Use `fetch()` to poll for messages without blocking. It returns `NULL` immediate
 ```r
 library(pubsubr)
 
-channel <- Channel$new(topic = "tasks")
+channel <- Channel(topic = "tasks")
 
 with_channel(channel, {
   publish("tasks", charToRaw("task-1"))
@@ -104,7 +104,7 @@ with_channel(channel, {
 ```r
 library(pubsubr)
 
-channel <- Channel$new(topic = "rpc.math.multiply")
+channel <- Channel(topic = "rpc.math.multiply")
 
 with_channel(channel, {
   handle_request <- function(request) {
@@ -143,7 +143,7 @@ rpc_multiply <- function(a, b, timeout = 2.0) {
 
   # Create a private response channel unique to this process
   response_topic <- sprintf("rpc.response.%d", Sys.getpid())
-  response_channel <- Channel$new(topic = response_topic)
+  response_channel <- Channel(topic = response_topic)
 
   with_channel(response_channel, {
     publish(
@@ -186,7 +186,7 @@ Either side can be swapped for the Python version from the formix-pubsub README.
 | `+` | One or more words | `logs.+` matches `logs.info`, `logs.error`, and `logs.app.info` |
 
 ```r
-channel <- Channel$new(topic = "logs.+")
+channel <- Channel(topic = "logs.+")
 
 with_channel(channel, {
   subscribe(channel, function(msg) {
@@ -209,7 +209,7 @@ returning -1, when it receives:
 - **SIGTERM**, only when the [sigterm](https://github.com/atheriel/sigterm)
   package is installed. Base R cannot catch SIGTERM, so without sigterm the
   process ends immediately and its channel is removed later by
-  `Channel$cleanup_inactive()`. Once sigterm is loaded, R no longer exits on
+  `cleanup_inactive_channels()`. Once sigterm is loaded, R no longer exits on
   SIGTERM: let your script end after `subscribe()` returns -1.
 
 `systemctl stop` sends SIGTERM by default. Without the sigterm package, set
@@ -236,8 +236,8 @@ KillSignal=SIGINT
 - `publish(topic, data, headers = NULL)`: publish a raw vector to all channels matching `topic`. Returns the number of channels that received the message.
 - `fetch(channel)`: fetch the next message without blocking. Returns `NULL` if the queue is empty.
 - `subscribe(channel, callback, timeout_seconds = 0)`: deliver messages to `callback` as they arrive (0 = listen indefinitely). Returns the number of messages processed, or -1 if stopped by a signal (see [Signals](#signals)).
-- `Channel$new(topic)`: a subscription endpoint. Use `with_channel(channel, { ... })` to ensure cleanup. Class methods: `Channel$active_paths()`, `Channel$inactive_paths()`, `Channel$matching_active_paths(topic)`, `Channel$cleanup_inactive()`.
-- `Message`: fields `id`, `timestamp` (microseconds), `topic`, `content` (raw vector), `headers` (named list). `msg$to_bytes()` and `Message$from_bytes(data)` serialize and deserialize.
+- `Channel(topic)`: a subscription endpoint, returned as an S3 object: a list of class `Channel` with elements `topic`, `process_id`, `random_id`, `directory_name`, `directory_path`, `queue_path` and `state`. Use `open(channel)` / `close(channel)`, or `with_channel(channel, { ... })` to ensure cleanup. Related functions: `active_channel_paths()`, `inactive_channel_paths()`, `matching_active_channel_paths(topic)`, `cleanup_inactive_channels()`.
+- `Message(topic, content, headers = NULL)`: an S3 object, a list with elements `id`, `timestamp` (microseconds), `topic`, `content` (raw vector) and `headers` (named list). `message_to_bytes(msg)` and `message_from_bytes(data)` serialize and deserialize; `write_message(msg, stream)` and `read_message(stream)` do the same on binary connections.
 
 ## Differences from the Python version
 
@@ -246,7 +246,7 @@ KillSignal=SIGINT
 | `bytes` | raw vector (`charToRaw()`, `rawToChar()`) |
 | `dict` headers | named list |
 | `with channel:` | `with_channel(channel, { ... })` |
-| `Channel.active_paths()` | `Channel$active_paths()` |
+| `Channel.active_paths()` | `active_channel_paths()` |
 | `ValueError`, `RuntimeError`, `TypeError`, `OSError` | conditions of class `value_error`, `runtime_error`, `type_error`, `os_error` |
 | `logging` | `message()` on stderr, filtered by the `pubsubr.log_level` option |
 | 64-bit integer ids | doubles, exact up to 2^53 (current microsecond timestamps are around 2^51) |

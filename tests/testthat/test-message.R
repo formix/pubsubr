@@ -4,7 +4,7 @@ test_that("message creation", {
   topic <- "test.topic"
   data <- charToRaw("Hello, World!")
 
-  message <- Message$new(topic = topic, content = data)
+  message <- Message(topic = topic, content = data)
 
   expect_equal(message$topic, topic)
   expect_equal(message$content, data)
@@ -12,8 +12,8 @@ test_that("message creation", {
 })
 
 test_that("message id uniqueness", {
-  message1 <- Message$new(topic = "test", content = charToRaw("data1"))
-  message2 <- Message$new(topic = "test", content = charToRaw("data2"))
+  message1 <- Message(topic = "test", content = charToRaw("data1"))
+  message2 <- Message(topic = "test", content = charToRaw("data2"))
 
   # IDs should be unique (random bits ensure this even in same microsecond)
   expect_false(message1$id == message2$id)
@@ -23,15 +23,15 @@ test_that("binary serialization", {
   topic <- "test.topic"
   data <- c(charToRaw("test data with "), as.raw(0), charToRaw(" null bytes"))
 
-  original_message <- Message$new(topic = topic, content = data)
+  original_message <- Message(topic = topic, content = data)
 
   # Serialize to bytes
-  serialized <- original_message$to_bytes()
+  serialized <- message_to_bytes(original_message)
   expect_true(is.raw(serialized))
   expect_gt(length(serialized), 0)
 
   # Deserialize from bytes
-  deserialized <- Message$from_bytes(serialized)
+  deserialized <- message_from_bytes(serialized)
 
   expect_equal(deserialized$topic, original_message$topic)
   expect_equal(deserialized$content, original_message$content)
@@ -39,15 +39,15 @@ test_that("binary serialization", {
 })
 
 test_that("empty data", {
-  message <- Message$new(topic = "empty.test", content = raw(0))
+  message <- Message(topic = "empty.test", content = raw(0))
 
   expect_equal(message$topic, "empty.test")
   expect_equal(message$content, raw(0))
   expect_length(message$content, 0)
 
   # Test serialization with empty data
-  serialized <- message$to_bytes()
-  deserialized <- Message$from_bytes(serialized)
+  serialized <- message_to_bytes(message)
+  deserialized <- message_from_bytes(serialized)
 
   expect_equal(deserialized$content, raw(0))
 })
@@ -56,20 +56,20 @@ test_that("unicode topic", {
   topic <- "test.unicode.тест.\U0001F680"
   data <- charToRaw("unicode test data")
 
-  message <- Message$new(topic = topic, content = data)
+  message <- Message(topic = topic, content = data)
 
   expect_equal(message$topic, topic)
 
   # Test serialization with unicode topic
-  serialized <- message$to_bytes()
-  deserialized <- Message$from_bytes(serialized)
+  serialized <- message_to_bytes(message)
+  deserialized <- message_from_bytes(serialized)
 
   expect_equal(deserialized$topic, topic)
   expect_equal(deserialized$content, data)
 })
 
 test_that("repr", {
-  message <- Message$new(topic = "test.topic", content = charToRaw("Hello, World!"))
+  message <- Message(topic = "test.topic", content = charToRaw("Hello, World!"))
 
   repr_str <- format(message)
 
@@ -81,7 +81,7 @@ test_that("repr", {
 test_that("timestamp", {
   # Create message and capture creation time with some tolerance
   before <- as.numeric(Sys.time()) - 0.01 # Add 10ms buffer before
-  message <- Message$new(topic = "test", content = charToRaw("data"))
+  message <- Message(topic = "test", content = charToRaw("data"))
   after <- as.numeric(Sys.time()) + 0.01 # Add 10ms buffer after
 
   # Get timestamp (an integer number of microseconds)
@@ -96,22 +96,22 @@ test_that("timestamp", {
   expect_true(before <= timestamp_seconds && timestamp_seconds <= after)
 
   # Test that timestamp is preserved through serialization
-  serialized <- message$to_bytes()
-  deserialized <- Message$from_bytes(serialized)
+  serialized <- message_to_bytes(message)
+  deserialized <- message_from_bytes(serialized)
 
   expect_equal(deserialized$timestamp, message$timestamp)
   expect_equal(deserialized$timestamp, floor(deserialized$timestamp))
 })
 
 test_that("headers empty", {
-  message <- Message$new(topic = "test", content = charToRaw("data"))
+  message <- Message(topic = "test", content = charToRaw("data"))
 
   expect_length(message$headers, 0)
   expect_true(is.list(message$headers))
 
   # Verify serialization preserves empty headers
-  serialized <- message$to_bytes()
-  deserialized <- Message$from_bytes(serialized)
+  serialized <- message_to_bytes(message)
+  deserialized <- message_from_bytes(serialized)
 
   expect_length(deserialized$headers, 0)
   expect_true(is.list(deserialized$headers))
@@ -123,15 +123,15 @@ test_that("headers with values", {
     "priority" = "high",
     "correlation-id" = "12345"
   )
-  message <- Message$new(topic = "test", content = charToRaw("data"), headers = headers)
+  message <- Message(topic = "test", content = charToRaw("data"), headers = headers)
 
   expect_equal(message$headers, headers)
   expect_equal(message$headers[["content-type"]], "application/json")
   expect_equal(message$headers[["priority"]], "high")
 
   # Verify serialization preserves headers
-  serialized <- message$to_bytes()
-  deserialized <- Message$from_bytes(serialized)
+  serialized <- message_to_bytes(message)
+  deserialized <- message_from_bytes(serialized)
 
   expect_equal(deserialized$headers, headers)
   expect_equal(deserialized$headers[["content-type"]], "application/json")
@@ -144,11 +144,11 @@ test_that("headers unicode values", {
     "user" = "José García",
     "message" = "Hello 世界 \U0001F30D"
   )
-  message <- Message$new(topic = "test", content = charToRaw("data"), headers = headers)
+  message <- Message(topic = "test", content = charToRaw("data"), headers = headers)
 
   # Verify serialization handles unicode in headers
-  serialized <- message$to_bytes()
-  deserialized <- Message$from_bytes(serialized)
+  serialized <- message_to_bytes(message)
+  deserialized <- message_from_bytes(serialized)
 
   expect_equal(deserialized$headers, headers)
   expect_equal(deserialized$headers[["user"]], "José García")
@@ -173,7 +173,7 @@ hex_to_raw <- function(hex) {
 }
 
 test_that("reads a message serialized by Python", {
-  message <- Message$from_bytes(hex_to_raw(python_fixture))
+  message <- message_from_bytes(hex_to_raw(python_fixture))
 
   expect_equal(message$id, 1793808798292166)
   expect_equal(message$timestamp, 1793808798299999)
@@ -188,7 +188,7 @@ test_that("reads a message serialized by Python", {
 })
 
 test_that("writes the same bytes as Python", {
-  message <- Message$new(
+  message <- Message(
     topic = "test.python.é",
     content = c(charToRaw("hello"), as.raw(0), charToRaw("world")),
     headers = list(s = "é \"q\"", i = 42L, f = 3.14, b = TRUE, n = NULL)
@@ -196,15 +196,15 @@ test_that("writes the same bytes as Python", {
   message$id <- 1793808798292166
   message$timestamp <- 1793808798299999
 
-  expect_equal(message$to_bytes(), hex_to_raw(python_fixture))
+  expect_equal(message_to_bytes(message), hex_to_raw(python_fixture))
 })
 
 test_that("invalid magic number", {
-  expect_error(Message$from_bytes(as.raw(c(0, 0, 0, 0, 1))), "Invalid magic number",
+  expect_error(message_from_bytes(as.raw(c(0, 0, 0, 0, 1))), "Invalid magic number",
                class = "value_error")
 })
 
 test_that("truncated message", {
-  data <- Message$new(topic = "test", content = charToRaw("data"))$to_bytes()
-  expect_error(Message$from_bytes(data[1:20]), "EOF", class = "value_error")
+  data <- message_to_bytes(Message(topic = "test", content = charToRaw("data")))
+  expect_error(message_from_bytes(data[1:20]), "EOF", class = "value_error")
 })

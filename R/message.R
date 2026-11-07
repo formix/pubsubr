@@ -21,7 +21,9 @@ MESSAGE_MAGIC_NUMBER <- 0x504D5347
 
 #' Message
 #'
-#' Represents a message in the pubsub system.
+#' Creates a message in the pubsub system, as an old-style (S3) object: a list
+#' of class `"Message"` with the elements `id`, `timestamp`, `topic`, `content`
+#' and `headers`.
 #'
 #' Message ids and timestamps are 64-bit unsigned integers on the wire. In R
 #' they are stored as doubles, which represent integers exactly up to 2^53;
@@ -30,109 +32,119 @@ MESSAGE_MAGIC_NUMBER <- 0x504D5347
 #' Headers are a named list of scalar values: character, numeric, logical or
 #' `NULL`. They are serialized as a JSON object.
 #'
-#' The Python class methods are available on the class generator:
-#' `Message$read(stream)` reads a message from a binary connection and
-#' `Message$from_bytes(data)` deserializes a raw vector.
+#' Messages are read with [read_message()] from a binary connection and
+#' deserialized from a raw vector with [message_from_bytes()]. They are
+#' written with [write_message()] and serialized with [message_to_bytes()].
 #'
-#' @field id Unique message identifier (time-based, numeric).
-#' @field timestamp Microseconds since the epoch (numeric).
-#' @field topic The topic this message belongs to.
-#' @field content The message payload as a raw vector.
-#' @field headers Named list of metadata.
+#' @param topic The topic this message belongs to.
+#' @param content The message payload as a raw vector.
+#' @param headers Optional named list of scalar values for metadata.
+#' @return A list of class `"Message"` with elements:
+#' \describe{
+#'   \item{`id`}{Unique message identifier (time-based, numeric).}
+#'   \item{`timestamp`}{Microseconds since the epoch (numeric).}
+#'   \item{`topic`}{The topic this message belongs to.}
+#'   \item{`content`}{The message payload as a raw vector.}
+#'   \item{`headers`}{Named list of metadata.}
+#' }
 #' @export
-Message <- R6::R6Class(
-  "Message",
-  public = list(
-    id = NULL,
-    timestamp = NULL,
-    topic = NULL,
-    content = NULL,
-    headers = NULL,
-
-    #' @description Initialize a new message.
-    #' @param topic The topic this message belongs to.
-    #' @param content The message payload as a raw vector.
-    #' @param headers Optional named list of scalar values for metadata.
-    initialize = function(topic, content, headers = NULL) {
-      self$id <- .next_id()
-      self$timestamp <- floor(.time_seconds() * 1e6) # microseconds since epoch
-      self$topic <- topic
-      self$content <- content
-      self$headers <- if (!is.null(headers)) headers else .empty_header()
-    },
-
-    #' @description Write the message to a binary connection.
-    #'
-    #' Binary format:
-    #' \itemize{
-    #'   \item 4 bytes: magic number (0x504D5347 - "PMSG")
-    #'   \item 1 byte: format version (uint8)
-    #'   \item 8 bytes: id (uint64)
-    #'   \item 8 bytes: timestamp (uint64, microseconds since epoch)
-    #'   \item 4 bytes: topic length (uint32)
-    #'   \item N bytes: topic (UTF-8 encoded)
-    #'   \item 4 bytes: headers JSON length (uint32)
-    #'   \item N bytes: headers as JSON string (UTF-8 encoded)
-    #'   \item 4 bytes: content length (uint32)
-    #'   \item N bytes: content
-    #' }
-    #' All integers are big-endian.
-    #' @param stream Binary connection to write to.
-    write = function(stream) {
-      if (!is.raw(self$content)) {
-        .raise("type_error", sprintf(
-          "content must be a raw vector, not '%s'", class(self$content)[1]
-        ))
-      }
-
-      # Encode strings as UTF-8
-      topic_bytes <- .utf8_bytes(self$topic)
-      headers_bytes <- .headers_to_json(self$headers) # UTF-8 encoded JSON
-
-      # Write each component to stream
-      writeBin(.pack_u32(MESSAGE_MAGIC_NUMBER), stream)
-      writeBin(as.raw(MESSAGE_FORMAT_VERSION), stream)
-      writeBin(.pack_u64(self$id), stream)
-      writeBin(.pack_u64(self$timestamp), stream)
-      writeBin(.pack_u32(length(topic_bytes)), stream)
-      writeBin(topic_bytes, stream)
-      writeBin(.pack_u32(length(headers_bytes)), stream)
-      writeBin(headers_bytes, stream)
-      writeBin(.pack_u32(length(self$content)), stream)
-      writeBin(self$content, stream)
-      invisible(self)
-    },
-
-    #' @description Convenience method to serialize message to bytes.
-    #' @return The serialized message as a raw vector.
-    to_bytes = function() {
-      stream <- rawConnection(raw(0), "wb")
-      on.exit(close(stream))
-      self$write(stream)
-      rawConnectionValue(stream)
-    },
-
-    #' @description Printable representation.
-    #' @param ... Ignored.
-    print = function(...) {
-      cat(format(self), "\n", sep = "")
-      invisible(self)
-    },
-
-    #' @description Text representation, like Python's `__repr__`.
-    #' @param ... Ignored.
-    format = function(...) {
-      sprintf(
-        "Message(id=%s, topic='%s', content_length=%d)",
-        format(self$id, scientific = FALSE), self$topic, length(self$content)
-      )
-    }
+Message <- function(topic, content, headers = NULL) {
+  structure(
+    list(
+      id = .next_id(),
+      timestamp = floor(.time_seconds() * 1e6), # microseconds since epoch
+      topic = topic,
+      content = content,
+      headers = if (!is.null(headers)) headers else .empty_header()
+    ),
+    class = "Message"
   )
-)
+}
 
-# Class methods, called as Message$read(stream) and Message$from_bytes(data).
+#' @rdname Message
+#' @param x A `Message`.
+#' @param ... Ignored.
+#' @export
+format.Message <- function(x, ...) {
+  sprintf(
+    "Message(id=%s, topic='%s', content_length=%d)",
+    format(x$id, scientific = FALSE), x$topic, length(x$content)
+  )
+}
 
-Message$read <- function(stream) {
+#' @rdname Message
+#' @export
+print.Message <- function(x, ...) {
+  cat(format(x), "\n", sep = "")
+  invisible(x)
+}
+
+#' Write a message to a binary connection
+#'
+#' Binary format:
+#' \itemize{
+#'   \item 4 bytes: magic number (0x504D5347 - "PMSG")
+#'   \item 1 byte: format version (uint8)
+#'   \item 8 bytes: id (uint64)
+#'   \item 8 bytes: timestamp (uint64, microseconds since epoch)
+#'   \item 4 bytes: topic length (uint32)
+#'   \item N bytes: topic (UTF-8 encoded)
+#'   \item 4 bytes: headers JSON length (uint32)
+#'   \item N bytes: headers as JSON string (UTF-8 encoded)
+#'   \item 4 bytes: content length (uint32)
+#'   \item N bytes: content
+#' }
+#' All integers are big-endian.
+#'
+#' @param message A [Message].
+#' @param stream Binary connection to write to.
+#' @return `message`, invisibly.
+#' @export
+write_message <- function(message, stream) {
+  if (!is.raw(message$content)) {
+    .raise("type_error", sprintf(
+      "content must be a raw vector, not '%s'", class(message$content)[1]
+    ))
+  }
+
+  # Encode strings as UTF-8
+  topic_bytes <- .utf8_bytes(message$topic)
+  headers_bytes <- .headers_to_json(message$headers) # UTF-8 encoded JSON
+
+  # Write each component to stream
+  writeBin(.pack_u32(MESSAGE_MAGIC_NUMBER), stream)
+  writeBin(as.raw(MESSAGE_FORMAT_VERSION), stream)
+  writeBin(.pack_u64(message$id), stream)
+  writeBin(.pack_u64(message$timestamp), stream)
+  writeBin(.pack_u32(length(topic_bytes)), stream)
+  writeBin(topic_bytes, stream)
+  writeBin(.pack_u32(length(headers_bytes)), stream)
+  writeBin(headers_bytes, stream)
+  writeBin(.pack_u32(length(message$content)), stream)
+  writeBin(message$content, stream)
+  invisible(message)
+}
+
+#' Serialize a message to bytes
+#'
+#' Convenience function to serialize a message with [write_message()].
+#'
+#' @param message A [Message].
+#' @return The serialized message as a raw vector.
+#' @export
+message_to_bytes <- function(message) {
+  stream <- rawConnection(raw(0), "wb")
+  on.exit(close(stream))
+  write_message(message, stream)
+  rawConnectionValue(stream)
+}
+
+#' Read a message from a binary connection
+#'
+#' @param stream Binary connection to read from.
+#' @return A [Message].
+#' @export
+read_message <- function(stream) {
   # Read and validate magic number
   magic_data <- .read_exact(stream, 4)
   magic <- .unpack_uint(magic_data)
@@ -182,17 +194,22 @@ Message$read <- function(stream) {
   data_length <- .unpack_uint(data_length_data)
   message_content <- .read_exact(stream, data_length)
 
-  # Create new instance and set the id and timestamp directly
-  message <- Message$new(topic = topic, content = message_content, headers = headers)
+  # Create a new message and set the id and timestamp directly
+  message <- Message(topic = topic, content = message_content, headers = headers)
   message$id <- message_id
   message$timestamp <- message_timestamp
   message
 }
 
-Message$from_bytes <- function(data) {
+#' Deserialize a message from bytes
+#'
+#' @param data A raw vector produced by [message_to_bytes()].
+#' @return A [Message].
+#' @export
+message_from_bytes <- function(data) {
   stream <- rawConnection(data, "rb")
   on.exit(close(stream))
-  Message$read(stream)
+  read_message(stream)
 }
 
 # --------------------------------------------------------------- helpers

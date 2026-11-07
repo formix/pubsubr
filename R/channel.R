@@ -4,11 +4,13 @@
 
 #' Channel
 #'
-#' Represents a pubsub channel using shared memory filesystem and FIFO queues.
+#' Creates a pubsub channel using the shared memory filesystem and a FIFO
+#' queue, and returns it as an old-style (S3) object: a list of class
+#' `"Channel"`.
 #'
-#' Creates a directory in the pubsub base directory with format
-#' `{topic}_{random_12_chars}_{process_id}`. It contains a non-blocking FIFO
-#' named `queue` for message passing, created and read with [base::fifo()].
+#' The channel directory is named `{topic}_{random_12_chars}_{process_id}` and
+#' holds a non-blocking FIFO named `queue`, created and read with
+#' [base::fifo()].
 #'
 #' Topic format supports wildcards:
 #' \itemize{
@@ -16,180 +18,185 @@
 #'   \item `+` for multiple words wildcard
 #' }
 #'
-#' The Python static methods are available on the class generator:
-#' `Channel$cleanup_inactive()`, `Channel$active_paths()`,
-#' `Channel$inactive_paths()` and `Channel$matching_active_paths(topic)`.
-#' Use [with_channel()] in place of Python's `with channel:` block.
+#' Elements of the list:
+#' \describe{
+#'   \item{`topic`}{The topic string.}
+#'   \item{`process_id`}{The id of the process that owns the channel.}
+#'   \item{`random_id`}{A random 12-character string.}
+#'   \item{`directory_name`}{`{topic}_{random_id}_{process_id}`.}
+#'   \item{`directory_path`}{Full path of the channel directory.}
+#'   \item{`queue_path`}{Full path of the channel FIFO.}
+#'   \item{`state`}{An environment holding the open FIFO connection (the one
+#'     mutable part of the channel, so that [open()] and [close()] work on
+#'     every copy of the object).}
+#' }
 #'
-#' @field topic The topic string.
-#' @field process_id The id of the process that owns the channel.
-#' @field random_id A random 12-character string.
-#' @field directory_name `{topic}_{random_id}_{process_id}`.
-#' @field directory_path Full path of the channel directory.
-#' @field queue_path Full path of the channel FIFO.
+#' Methods: `open(channel)` opens the FIFO for reading in non-blocking mode,
+#' `close(channel)` closes it and removes the channel directory with any
+#' unconsumed message, and `format()` / `print()` give a printable
+#' representation. Use [with_channel()] in place of Python's `with channel:`
+#' block. The Python static methods are [active_channel_paths()],
+#' [inactive_channel_paths()], [matching_active_channel_paths()] and
+#' [cleanup_inactive_channels()].
+#'
+#' @param topic The topic string (dot-separated terms with optional
+#'   wildcards).
+#' @return A list of class `"Channel"`.
 #' @export
-Channel <- R6::R6Class(
-  "Channel",
-  public = list(
-    topic = NULL,
-    process_id = NULL,
-    random_id = NULL,
-    directory_name = NULL,
-    directory_path = NULL,
-    queue_path = NULL,
+Channel <- function(topic) {
+  .validate_topic(topic)
+  process_id <- Sys.getpid()
+  random_id <- .generate_random_id()
+  directory_name <- sprintf("%s_%s_%d", topic, random_id, process_id)
+  directory_path <- file.path(get_base_dir(), directory_name)
 
-    #' @description Initialize a new channel.
-    #' @param topic The topic string (dot-separated terms with optional
-    #'   wildcards).
-    initialize = function(topic) {
-      Channel$validate_topic(topic)
-      private$fp <- NULL
-      self$topic <- topic
-      self$process_id <- Sys.getpid()
-      self$random_id <- private$generate_random_id()
-      self$directory_name <- sprintf("%s_%s_%d", topic, self$random_id, self$process_id)
-      self$directory_path <- file.path(get_base_dir(), self$directory_name)
-      self$queue_path <- file.path(self$directory_path, "queue")
+  state <- new.env(parent = emptyenv())
+  state$connection <- NULL
+  # Not part of the Python API; avoids leaking file descriptors when a
+  # channel is garbage-collected while open.
+  reg.finalizer(state, function(e) {
+    if (!is.null(e$connection)) try(close(e$connection), silent = TRUE)
+  })
 
-      # Create the channel directory and FIFO
-      private$create_channel()
+  channel <- structure(
+    list(
+      topic = topic,
+      process_id = process_id,
+      random_id = random_id,
+      directory_name = directory_name,
+      directory_path = directory_path,
+      queue_path = file.path(directory_path, "queue"),
+      state = state
+    ),
+    class = "Channel"
+  )
+
+  .create_channel(channel)
+  channel
+}
+
+#' @rdname Channel
+#' @param con A `Channel`.
+#' @param x A `Channel`.
+#' @param ... Ignored.
+#' @export
+open.Channel <- function(con, ...) {
+  state <- con$state
+  if (!is.null(state$connection)) {
+    return(invisible(con)) # Already open
+  }
+
+  state$connection <- tryCatch(
+    fifo(con$queue_path, open = "rb", blocking = FALSE),
+    warning = function(e) {
+      .raise("os_error", sprintf(
+        "Failed to open queue for reading: %s", conditionMessage(e)
+      ), parent = e)
     },
-
-    #' @description Open the FIFO queue for reading in non-blocking mode.
-    open = function() {
-      if (!is.null(private$fp)) {
-        return(invisible(self)) # Already open
-      }
-
-      private$fp <- tryCatch(
-        fifo(self$queue_path, open = "rb", blocking = FALSE),
-        warning = function(e) {
-          .raise("os_error", sprintf(
-            "Failed to open queue for reading: %s", conditionMessage(e)
-          ), parent = e)
-        },
-        error = function(e) {
-          .raise("os_error", sprintf(
-            "Failed to open queue for reading: %s", conditionMessage(e)
-          ), parent = e)
-        }
-      )
-      invisible(self)
-    },
-
-    #' @description Close and clean up the channel by removing unconsumed
-    #'   messages, the FIFO, and directory.
-    #'
-    #' This ensures that any undelivered messages are properly deleted when
-    #' the channel is disposed, preventing resource leaks.
-    close = function() {
-      # Close the file descriptor if it's open
-      if (is.null(private$fp)) {
-        return(invisible(self)) # Already closed or never opened
-      }
-
-      on.exit(Channel$delete_recursive(self$directory_path))
-      tryCatch(
-        {
-          close(private$fp)
-          private$fp <- NULL
-        },
-        error = function(e) {
-          .raise("runtime_error", sprintf(
-            "Failed to close channel file descriptor %s: %s",
-            self$directory_name, conditionMessage(e)
-          ), parent = e)
-        }
-      )
-      invisible(self)
-    },
-
-    #' @description Printable representation, like Python's `__str__`.
-    #' @param ... Ignored.
-    format = function(...) {
-      sprintf("Channel(topic='%s', directory='%s')", self$topic, self$directory_name)
-    },
-
-    #' @description Representation, like Python's `__repr__`.
-    repr = function() {
-      sprintf(
-        "Channel(topic='%s', pid=%d, random_id='%s')",
-        self$topic, self$process_id, self$random_id
-      )
-    },
-
-    #' @description Print the channel.
-    #' @param ... Ignored.
-    print = function(...) {
-      cat(self$repr(), "\n", sep = "")
-      invisible(self)
-    }
-  ),
-
-  active = list(
-    #' @field is_open Check if the channel's FIFO is currently open for
-    #'   reading.
-    is_open = function(value) {
-      if (!missing(value)) stop("is_open is read-only", call. = FALSE)
-      !is.null(private$fp)
-    },
-
-    #' @field connection The fifo connection open for reading, or `NULL`.
-    connection = function(value) {
-      if (!missing(value)) stop("connection is read-only", call. = FALSE)
-      private$fp
-    }
-  ),
-
-  private = list(
-    fp = NULL,
-
-    # Generate a random 12-character string.
-    generate_random_id = function() {
-      paste(sample(c(letters, LETTERS, as.character(0:9)), 12, replace = TRUE),
-            collapse = "")
-    },
-
-    # Create the channel directory and FIFO queue.
-    create_channel = function() {
-      tryCatch(
-        {
-          dir.create(self$directory_path, recursive = TRUE, showWarnings = FALSE)
-          if (!dir.exists(self$directory_path)) {
-            stop("cannot create directory '", self$directory_path, "'")
-          }
-          if (!file.exists(self$queue_path)) {
-            # fifo() creates the FIFO when it opens it for writing; opening it
-            # for both reading and writing does not need another reader.
-            con <- fifo(self$queue_path, open = "w+b", blocking = FALSE)
-            close(con)
-            Sys.chmod(self$queue_path, mode = "0660", use_umask = FALSE)
-          }
-        },
-        error = function(e) {
-          .raise("runtime_error", sprintf(
-            "Failed to create channel directory or FIFO: %s", conditionMessage(e)
-          ), parent = e)
-        }
-      )
-    },
-
-    finalize = function() {
-      # Not part of the Python API; avoids leaking file descriptors when a
-      # channel object is garbage-collected while open.
-      if (!is.null(private$fp)) {
-        try(self$close(), silent = TRUE)
-      }
+    error = function(e) {
+      .raise("os_error", sprintf(
+        "Failed to open queue for reading: %s", conditionMessage(e)
+      ), parent = e)
     }
   )
-)
+  invisible(con)
+}
 
-# ------------------------------------------------------ static methods
+#' @rdname Channel
+#' @export
+close.Channel <- function(con, ...) {
+  state <- con$state
+  # Already closed or never opened
+  if (is.null(state$connection)) {
+    return(invisible(con))
+  }
+
+  on.exit(.delete_recursive(con$directory_path))
+  tryCatch(
+    {
+      close(state$connection)
+      state$connection <- NULL
+    },
+    error = function(e) {
+      .raise("runtime_error", sprintf(
+        "Failed to close channel file descriptor %s: %s",
+        con$directory_name, conditionMessage(e)
+      ), parent = e)
+    }
+  )
+  invisible(con)
+}
+
+#' @rdname Channel
+#' @export
+format.Channel <- function(x, ...) {
+  sprintf("Channel(topic='%s', directory='%s')",
+          x$topic, x$directory_name)
+}
+
+#' @rdname Channel
+#' @export
+print.Channel <- function(x, ...) {
+  cat(.channel_repr(x), "\n", sep = "")
+  invisible(x)
+}
+
+# Representation, like Python's __repr__.
+.channel_repr <- function(channel) {
+  sprintf(
+    "Channel(topic='%s', pid=%d, random_id='%s')",
+    channel$topic, channel$process_id, channel$random_id
+  )
+}
+
+# The fifo connection open for reading, or NULL.
+.channel_connection <- function(channel) {
+  channel$state$connection
+}
+
+# Whether the channel's FIFO is currently open for reading.
+.channel_is_open <- function(channel) {
+  !is.null(.channel_connection(channel))
+}
+
+# Generate a random 12-character string.
+.generate_random_id <- function() {
+  paste(sample(c(letters, LETTERS, as.character(0:9)), 12, replace = TRUE),
+        collapse = "")
+}
+
+# Create the channel directory and FIFO queue.
+.create_channel <- function(channel) {
+  directory_path <- channel$directory_path
+  queue_path <- channel$queue_path
+  tryCatch(
+    {
+      dir.create(directory_path, recursive = TRUE, showWarnings = FALSE)
+      if (!dir.exists(directory_path)) {
+        stop("cannot create directory '", directory_path, "'")
+      }
+      if (!file.exists(queue_path)) {
+        # fifo() creates the FIFO when it opens it for writing; opening it
+        # for both reading and writing does not need another reader.
+        con <- fifo(queue_path, open = "w+b", blocking = FALSE)
+        close(con)
+        Sys.chmod(queue_path, mode = "0660", use_umask = FALSE)
+      }
+    },
+    error = function(e) {
+      .raise("runtime_error", sprintf(
+        "Failed to create channel directory or FIFO: %s", conditionMessage(e)
+      ), parent = e)
+    }
+  )
+}
+
+# ------------------------------------------------------ static functions
 
 # Validate that topic contains only allowed characters.
 #
 # Valid characters: [a-zA-Z0-9+=.-]
-Channel$validate_topic <- function(topic) {
+.validate_topic <- function(topic) {
   if (is.null(topic) || length(topic) != 1L || is.na(topic) || !nzchar(topic)) {
     .raise("value_error", "Topic cannot be empty")
   }
@@ -208,7 +215,7 @@ Channel$validate_topic <- function(topic) {
 }
 
 # Recursively delete a directory and all its contents.
-Channel$delete_recursive <- function(dir) {
+.delete_recursive <- function(dir) {
   if (!file.exists(dir)) {
     return(invisible(NULL))
   }
@@ -217,7 +224,7 @@ Channel$delete_recursive <- function(dir) {
     tryCatch(
       {
         if (dir.exists(item)) {
-          Channel$delete_recursive(item)
+          .delete_recursive(item)
         } else if (unlink(item) != 0L) {
           stop("cannot remove file '", item, "'")
         }
@@ -233,16 +240,19 @@ Channel$delete_recursive <- function(dir) {
   invisible(NULL)
 }
 
-# Clean up all inactive channels in the pubsub base directory.
-#
-# Inactive channels are those where the associated process is no longer
-# running. This method removes their directories and any unconsumed messages to
-# free up resources.
-Channel$cleanup_inactive <- function() {
-  for (path in Channel$inactive_paths()) {
+#' Clean up all inactive channels in the pubsub base directory
+#'
+#' Inactive channels are those where the associated process is no longer
+#' running. This removes their directories and any unconsumed messages to
+#' free up resources.
+#'
+#' @return `NULL`, invisibly.
+#' @export
+cleanup_inactive_channels <- function() {
+  for (path in inactive_channel_paths()) {
     tryCatch(
       {
-        Channel$delete_recursive(path)
+        .delete_recursive(path)
         .log("INFO", "Cleaned up inactive channel at %s", path)
       },
       error = function(e) {
@@ -280,29 +290,33 @@ Channel$cleanup_inactive <- function() {
   sort(channels, method = "radix")
 }
 
-# List all active channel paths in the pubsub base directory.
-#
-# Only includes channels where the associated process is still running.
-Channel$active_paths <- function() {
+#' List channel directories in the pubsub base directory
+#'
+#' `active_channel_paths()` only includes channels where the associated process
+#' is still running, `inactive_channel_paths()` those where it is not.
+#' `matching_active_channel_paths()` finds the active channel directories whose
+#' topic matches `topic`, converting wildcards to regex patterns: `=` becomes
+#' `[a-zA-Z0-9-]` (single word wildcard) and `+` becomes `[a-zA-Z0-9.-]*`
+#' (multiple words wildcard).
+#'
+#' @return A sorted character vector of directory paths.
+#' @export
+active_channel_paths <- function() {
   .channel_paths(active = TRUE)
 }
 
-# List all inactive channel paths in the pubsub base directory.
-#
-# Includes channels where the associated process is no longer running.
-Channel$inactive_paths <- function() {
+#' @rdname active_channel_paths
+#' @export
+inactive_channel_paths <- function() {
   .channel_paths(active = FALSE)
 }
 
-# Find all channel directories in the pubsub base directory that match the
-# given topic using regex.
-#
-# Converts wildcards to regex patterns:
-# - '=' becomes '[a-zA-Z0-9-]' (single word wildcard)
-# - '+' becomes '[a-zA-Z0-9.-]*' (multiple words wildcard)
-Channel$matching_active_paths <- function(topic) {
+#' @rdname active_channel_paths
+#' @param topic The (wildcard-free) topic to match channels against.
+#' @export
+matching_active_channel_paths <- function(topic) {
   matching_channels <- character(0)
-  for (item in Channel$active_paths()) {
+  for (item in active_channel_paths()) {
     parts <- strsplit(basename(item), "_", fixed = TRUE)[[1]]
     topic_pattern <- parts[1]
     regex_pattern <- gsub("+", "[a-zA-Z0-9.-]*",
@@ -326,7 +340,7 @@ Channel$matching_active_paths <- function(topic) {
 #' @return The value of `code`.
 #' @export
 with_channel <- function(channel, code) {
-  channel$open()
-  on.exit(channel$close())
+  open(channel)
+  on.exit(close(channel))
   if (is.function(code)) code(channel) else code
 }

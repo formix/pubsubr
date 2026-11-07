@@ -15,7 +15,7 @@ Rscript -e 'library(pubsubr); publish("interop.from.r", charToRaw("bonjour"), li
 wait
 
 echo "== R subscribes, Python publishes"
-Rscript -e 'library(pubsubr); ch <- Channel$new("interop.="); invisible(with_channel(ch, subscribe(ch, function(m) { cat("R received", m$topic, rawToChar(m$content), "\n"); str(m$headers) }, 2)))' &
+Rscript -e 'library(pubsubr); ch <- Channel("interop.="); invisible(with_channel(ch, subscribe(ch, function(m) { cat("R received", m$topic, rawToChar(m$content), "\n"); str(m$headers) }, 2)))' &
 sleep 1
 python3 -c 'from pubsub import publish; publish("interop.x", b"salut", {"a": 1, "b": None, "c": 2.5})'
 wait

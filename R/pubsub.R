@@ -23,15 +23,15 @@ publish <- function(topic, data, headers = NULL) {
     ))
   }
 
-  message <- Message$new(topic = topic, content = data, headers = headers)
+  message <- Message(topic = topic, content = data, headers = headers)
   tmp_dir <- file.path(get_base_dir(), "tmp")
   dir.create(tmp_dir, recursive = TRUE, showWarnings = FALSE) # Ensure temporary directory exists
   message_temp_file <- file.path(tmp_dir, format(message$id, scientific = FALSE))
   msg_file <- file(message_temp_file, "wb")
-  tryCatch(message$write(msg_file), finally = close(msg_file))
+  tryCatch(write_message(message, msg_file), finally = close(msg_file))
 
   publication_count <- 0L
-  matching_channels <- Channel$matching_active_paths(topic)
+  matching_channels <- matching_active_channel_paths(topic)
   for (channel_dir in matching_channels) {
     queue_path <- file.path(channel_dir, "queue")
     if (!file.exists(queue_path)) {
@@ -88,12 +88,12 @@ publish <- function(topic, data, headers = NULL) {
 #' and `value_error` if the message format is invalid.
 #' @export
 fetch <- function(channel) {
-  if (!channel$is_open) {
+  if (!.channel_is_open(channel)) {
     .raise("runtime_error", "Channel must be open to fetch messages")
   }
 
   # Read message ID from queue (non-blocking)
-  id_bytes <- readBin(channel$connection, "raw", 8L)
+  id_bytes <- readBin(.channel_connection(channel), "raw", 8L)
 
   if (length(id_bytes) != 8L) {
     # No data available or incomplete ID
@@ -107,7 +107,7 @@ fetch <- function(channel) {
   }
 
   msg_file <- file(message_file_path, "rb")
-  message <- tryCatch(Message$read(msg_file), finally = close(msg_file))
+  message <- tryCatch(read_message(msg_file), finally = close(msg_file))
 
   unlink(message_file_path)
 
@@ -133,7 +133,7 @@ fetch <- function(channel) {
 #' `tryCatch(..., interrupt = function(sig) ...)`. Base R cannot intercept
 #' SIGTERM: without the sigterm package it terminates the R process
 #' immediately, and the channel directory left behind is removed later by
-#' `Channel$cleanup_inactive()`. When the sigterm package is installed, it is
+#' [cleanup_inactive_channels()]. When the sigterm package is installed, it is
 #' loaded by `subscribe()`, which then polls `sigterm::has_sigterm_flag()`.
 #' Once sigterm is loaded, R no longer exits on SIGTERM, and the flag stays
 #' set: the program should exit after `subscribe()` returns -1.
@@ -156,7 +156,7 @@ subscribe <- function(channel, callback, timeout_seconds = 0) {
     .raise("value_error", "timeout_seconds must be non-negative")
   }
 
-  if (!channel$is_open) {
+  if (!.channel_is_open(channel)) {
     .raise("runtime_error", "Channel must be open to subscribe")
   }
 

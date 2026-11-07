@@ -4,15 +4,15 @@
 # test. close() only cleans up an open channel, so they are opened first.
 track <- function(channel, env = parent.frame()) {
   withr::defer({
-    channel$open()
-    channel$close()
+    open(channel)
+    close(channel)
   }, envir = env)
   channel
 }
 
 test_that("channel creation", {
   topic <- "test.topic"
-  channel <- track(Channel$new(topic = topic))
+  channel <- track(Channel(topic = topic))
 
   expect_equal(channel$topic, topic)
   expect_equal(channel$process_id, Sys.getpid())
@@ -23,7 +23,7 @@ test_that("channel creation", {
 
 test_that("channel directory format", {
   topic <- "test.format"
-  channel <- track(Channel$new(topic = topic))
+  channel <- track(Channel(topic = topic))
 
   # Directory name should be: {topic}_{random_12_chars}_{process_id}
   parts <- strsplit(channel$directory_name, "_", fixed = TRUE)[[1]]
@@ -34,15 +34,15 @@ test_that("channel directory format", {
 })
 
 test_that("unique channel ids", {
-  channel1 <- track(Channel$new(topic = "test"))
-  channel2 <- track(Channel$new(topic = "test"))
+  channel1 <- track(Channel(topic = "test"))
+  channel2 <- track(Channel(topic = "test"))
 
   expect_false(channel1$random_id == channel2$random_id)
   expect_false(channel1$directory_name == channel2$directory_name)
 })
 
 test_that("topic validation empty", {
-  expect_error(Channel$new(topic = ""), "cannot be empty", class = "value_error")
+  expect_error(Channel(topic = ""), "cannot be empty", class = "value_error")
 })
 
 test_that("topic validation invalid chars", {
@@ -69,7 +69,7 @@ test_that("topic validation invalid chars", {
   )
 
   for (invalid_topic in invalid_topics) {
-    err <- expect_error(Channel$new(topic = invalid_topic), class = "value_error")
+    err <- expect_error(Channel(topic = invalid_topic), class = "value_error")
     expect_match(tolower(conditionMessage(err)), "invalid characters", fixed = TRUE)
   }
 })
@@ -92,14 +92,14 @@ test_that("topic validation valid chars", {
   )
 
   for (valid_topic in valid_topics) {
-    channel <- Channel$new(topic = valid_topic)
+    channel <- Channel(topic = valid_topic)
     track(channel)
     expect_equal(channel$topic, valid_topic)
   }
 })
 
 test_that("channel cleanup", {
-  channel <- Channel$new(topic = "test.cleanup")
+  channel <- Channel(topic = "test.cleanup")
   directory_path <- channel$directory_path
   queue_path <- channel$queue_path
 
@@ -108,10 +108,10 @@ test_that("channel cleanup", {
   expect_true(file.exists(queue_path))
 
   # Open channel (required before close can cleanup)
-  channel$open()
+  open(channel)
 
   # Cleanup
-  channel$close()
+  close(channel)
 
   # Verify they're removed
   expect_false(file.exists(directory_path))
@@ -120,7 +120,7 @@ test_that("channel cleanup", {
 
 test_that("channel context manager", {
   topic <- "test.context"
-  channel <- Channel$new(topic = topic)
+  channel <- Channel(topic = topic)
   directory_path <- channel$directory_path
   queue_path <- channel$queue_path
 
@@ -137,7 +137,7 @@ test_that("channel context manager", {
 })
 
 test_that("str representation", {
-  channel <- track(Channel$new(topic = "test.str"))
+  channel <- track(Channel(topic = "test.str"))
 
   str_repr <- format(channel)
   expect_match(str_repr, "Channel", fixed = TRUE)
@@ -146,9 +146,9 @@ test_that("str representation", {
 })
 
 test_that("repr representation", {
-  channel <- track(Channel$new(topic = "test.repr"))
+  channel <- track(Channel(topic = "test.repr"))
 
-  repr_str <- channel$repr()
+  repr_str <- .channel_repr(channel)
   expect_match(repr_str, "Channel", fixed = TRUE)
   expect_match(repr_str, "test.repr", fixed = TRUE)
   expect_match(repr_str, as.character(channel$process_id), fixed = TRUE)
@@ -167,7 +167,7 @@ test_that("active paths empty", {
     }
   }
 
-  active <- Channel$active_paths()
+  active <- active_channel_paths()
   # Should be empty or only contain channels from this process
   for (path in active) {
     parts <- strsplit(basename(path), "_", fixed = TRUE)[[1]]
@@ -177,10 +177,10 @@ test_that("active paths empty", {
 })
 
 test_that("active paths with channels", {
-  channel1 <- track(Channel$new(topic = "test.active1"))
-  channel2 <- track(Channel$new(topic = "test.active2"))
+  channel1 <- track(Channel(topic = "test.active1"))
+  channel2 <- track(Channel(topic = "test.active2"))
 
-  active <- Channel$active_paths()
+  active <- active_channel_paths()
 
   # Should include our channels
   expect_true(channel1$directory_name %in% basename(active))
@@ -198,29 +198,29 @@ test_that("inactive paths", {
   dir.create(fake_dir, showWarnings = FALSE)
   on.exit(if (file.exists(fake_dir)) file.remove(fake_dir), add = TRUE)
 
-  inactive <- Channel$inactive_paths()
+  inactive <- inactive_channel_paths()
 
   # Should include our fake channel
   expect_true(basename(fake_dir) %in% basename(inactive))
 })
 
 test_that("cleanup inactive", {
-  # Not in the Python test suite: exercises Channel$cleanup_inactive().
+  # Not in the Python test suite: exercises cleanup_inactive_channels().
   base_dir <- get_base_dir()
   dir.create(base_dir, recursive = TRUE, showWarnings = FALSE)
   fake_dir <- file.path(base_dir, "test.cleanup.inactive_abc123def456_999999998")
   dir.create(fake_dir, showWarnings = FALSE)
   writeBin(charToRaw("orphan"), file.path(fake_dir, "123"))
 
-  Channel$cleanup_inactive()
+  cleanup_inactive_channels()
 
   expect_false(file.exists(fake_dir))
 })
 
 test_that("matching active paths exact", {
-  channel <- track(Channel$new(topic = "exact.match.topic"))
+  channel <- track(Channel(topic = "exact.match.topic"))
 
-  matches <- Channel$matching_active_paths("exact.match.topic")
+  matches <- matching_active_channel_paths("exact.match.topic")
 
   expect_gt(length(matches), 0)
   expect_true(channel$directory_name %in% basename(matches))
@@ -229,37 +229,37 @@ test_that("matching active paths exact", {
 test_that("matching active paths single wildcard", {
   # The = wildcard is converted to [a-zA-Z0-9-] which matches a single
   # character, not a single word.
-  channel1 <- track(Channel$new(topic = "tes=.match"))
+  channel1 <- track(Channel(topic = "tes=.match"))
 
   # Should match: the = becomes [a-zA-Z0-9-] in regex
-  matches <- Channel$matching_active_paths("test.match")
+  matches <- matching_active_channel_paths("test.match")
   has_wildcard_match <- any(grepl("tes=.match", basename(matches), fixed = TRUE))
   # The wildcard should match (t-e-s-[any allowed char].match)
   expect_true(has_wildcard_match)
 })
 
 test_that("matching active paths multi wildcard", {
-  channel <- track(Channel$new(topic = "test.+"))
+  channel <- track(Channel(topic = "test.+"))
 
   # Should match zero or more words
-  matches_single <- Channel$matching_active_paths("test.word")
-  matches_multi <- Channel$matching_active_paths("test.word.sub.topic")
+  matches_single <- matching_active_channel_paths("test.word")
+  matches_multi <- matching_active_channel_paths("test.word.sub.topic")
 
   expect_true(any(startsWith(basename(matches_single), "test.+")))
   expect_true(any(startsWith(basename(matches_multi), "test.+")))
 })
 
 test_that("matching active paths no match", {
-  channel <- track(Channel$new(topic = "specific.topic"))
+  channel <- track(Channel(topic = "specific.topic"))
 
-  matches <- Channel$matching_active_paths("different.topic")
+  matches <- matching_active_channel_paths("different.topic")
 
   # Should not include our channel
   expect_false(channel$directory_name %in% basename(matches))
 })
 
 test_that("channel base dir", {
-  channel <- track(Channel$new(topic = "test.basedir"))
+  channel <- track(Channel(topic = "test.basedir"))
 
   base_dir <- get_base_dir()
   expect_equal(dirname(channel$directory_path), base_dir)
@@ -268,9 +268,9 @@ test_that("channel base dir", {
 
 test_that("multiple channels same topic", {
   topic <- "shared.topic"
-  channel1 <- track(Channel$new(topic = topic))
-  channel2 <- track(Channel$new(topic = topic))
-  channel3 <- track(Channel$new(topic = topic))
+  channel1 <- track(Channel(topic = topic))
+  channel2 <- track(Channel(topic = topic))
+  channel3 <- track(Channel(topic = topic))
 
   # All should have same topic but different directories
   expect_true(channel1$topic == channel2$topic && channel2$topic == channel3$topic)
@@ -281,7 +281,7 @@ test_that("multiple channels same topic", {
 })
 
 test_that("cleanup with files", {
-  channel <- Channel$new(topic = "test.files")
+  channel <- Channel(topic = "test.files")
 
   # Create some test files in the channel directory
   test_file1 <- file.path(channel$directory_path, "message1.dat")
@@ -296,13 +296,34 @@ test_that("cleanup with files", {
   expect_true(file.exists(test_file2))
 
   # Open channel (required before close can cleanup)
-  channel$open()
+  open(channel)
 
   # Cleanup should remove everything
-  channel$close()
+  close(channel)
 
   # Verify directory and files are gone
   expect_false(file.exists(directory_path))
   expect_false(file.exists(test_file1))
   expect_false(file.exists(test_file2))
+})
+
+test_that("channel is a list with class Channel", {
+  channel <- track(Channel(topic = "test.s3"))
+
+  expect_s3_class(channel, "Channel")
+  expect_true(is.list(channel))
+  expect_true(dir.exists(channel$directory_path))
+  expect_equal(basename(channel$directory_path), channel$directory_name)
+  expect_equal(channel$queue_path, file.path(channel$directory_path, "queue"))
+})
+
+test_that("open and close share state across copies", {
+  channel <- Channel(topic = "test.copies")
+  copy <- channel
+
+  open(channel)
+  expect_true(.channel_is_open(copy))
+  close(copy)
+  expect_false(.channel_is_open(channel))
+  expect_false(dir.exists(channel$directory_path))
 })
