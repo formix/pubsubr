@@ -123,8 +123,7 @@ publish <- function(topic, data, headers = NULL) {
     }
     queue_path <- file.path(channel_dir, "queue")
     if (!file.exists(queue_path)) {
-      logger::log_warn("Channel directory %s does not contain a queue file. Skipping.",
-           channel_dir)
+      logger::log_warn("Channel directory {channel_dir} does not contain a queue file. Skipping.")
       next
     }
     message_file_path <- file.path(channel_dir, message$id)
@@ -136,8 +135,10 @@ publish <- function(topic, data, headers = NULL) {
           message$id, channel_dir, publication_count
         ))
       }
-      logger::log_warn("Failed to publish message %s to %s: cannot link '%s' to '%s'",
-           message$id, queue_path, message_temp_file, message_file_path)
+      logger::log_warn(paste0(
+        "Failed to publish message {message$id} to {queue_path}: ",
+        "cannot link '{message_temp_file}' to '{message_file_path}'"
+      ))
       next
     }
     tryCatch(
@@ -154,12 +155,14 @@ publish <- function(topic, data, headers = NULL) {
         )
       },
       warning = function(e) {
-        logger::log_warn("Failed to publish message %s to %s: %s",
-             message$id, queue_path, conditionMessage(e))
+        logger::log_warn(
+          "Failed to publish message {message$id} to {queue_path}: {conditionMessage(e)}"
+        )
       },
       error = function(e) {
-        logger::log_warn("Failed to publish message %s to %s: %s",
-             message$id, queue_path, conditionMessage(e))
+        logger::log_warn(
+          "Failed to publish message {message$id} to {queue_path}: {conditionMessage(e)}"
+        )
       }
     )
   }
@@ -281,8 +284,9 @@ subscribe <- function(channel, callback, timeout_seconds = 0) {
           tryCatch(
             callback(message),
             error = function(e) {
-              logger::log_warn("Error processing message %s: %s",
-                   format(message), conditionMessage(e))
+              logger::log_warn(
+                "Error processing message {format(message)}: {conditionMessage(e)}"
+              )
             }
           )
           message_count <- message_count + 1L
@@ -296,8 +300,9 @@ subscribe <- function(channel, callback, timeout_seconds = 0) {
     }
   )
   if (shutdown_requested) {
-    logger::log_info("Exiting subscribe loop on '%s'. Handled %i messages.",
-         channel$topic, message_count)
+    logger::log_info(
+      "Exiting subscribe loop on '{channel$topic}'. Handled {message_count} messages."
+    )
     return(-1L) # Indicate shutdown by signal
   }
   message_count

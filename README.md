@@ -218,9 +218,11 @@ special setting is needed in the unit file.
 | `PUBSUB_HOME` | Directory for channel and message storage | `/dev/shm/pubsub` on Linux, system temp dir elsewhere |
 
 Logging uses the [logger](https://daroczig.github.io/logger/) package, in the
-`pubsubr` namespace. Only warnings and errors are logged by default; for example,
-`logger::log_threshold(logger::INFO, namespace = "pubsubr")` also shows progress
-messages, and `logger::log_appender()` redirects them.
+`pubsubr` namespace, and sets nothing itself: threshold, layout and appender are
+inherited from your logger settings, as for any other package. Adjust pubsubr
+alone with the `namespace` argument, for example
+`logger::log_threshold(logger::WARN, namespace = "pubsubr")`, or silence it with
+`logger::log_appender(logger::appender_void, namespace = "pubsubr")`.
 
 ## API Summary
 

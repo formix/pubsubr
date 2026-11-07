@@ -291,7 +291,7 @@ print.Channel <- function(x, ...) {
         }
       },
       error = function(e) {
-        logger::log_warn("Failed to delete %s: %s", item, conditionMessage(e))
+        logger::log_warn("Failed to delete {item}: {conditionMessage(e)}")
       }
     )
   }
@@ -314,11 +314,12 @@ cleanup_inactive_channels <- function() {
     tryCatch(
       {
         .delete_recursive(path)
-        logger::log_info("Cleaned up inactive channel at %s", path)
+        logger::log_info("Cleaned up inactive channel at {path}")
       },
       error = function(e) {
-        logger::log_warn("Failed to clean up inactive channel at %s: %s",
-             path, conditionMessage(e))
+        logger::log_warn(
+          "Failed to clean up inactive channel at {path}: {conditionMessage(e)}"
+        )
       }
     )
   }
