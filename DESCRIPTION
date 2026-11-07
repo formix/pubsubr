@@ -19,6 +19,7 @@ Copyright: See inst/COPYRIGHTS. src/sigterm.c is adapted from the 'sigterm'
 URL: https://github.com/formix/pubsubr, https://github.com/formix/pubsub
 BugReports: https://github.com/formix/pubsubr/issues
 Encoding: UTF-8
+Language: en-US
 Depends: R (>= 3.5.0)
 Imports:
     jsonlite,
