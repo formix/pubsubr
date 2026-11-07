@@ -9,12 +9,10 @@ Authors@R: c(
            comment = "Author of the 'sigterm' package, from which src/sigterm.c is adapted")
     )
 Description: A serverless publish-subscribe library for local interprocess
-    communication. Messages are routed through kernel FIFO named pipes and
-    stored on the shared-memory filesystem ('/dev/shm' on Linux), with no
-    broker or server process. Topics support wildcards, and a subscriber can
-    shut down gracefully on SIGINT or SIGTERM. This is a translation of the
-    Python 'formix-pubsub' library and uses the same on-disk and wire formats,
-    so R and Python processes can exchange messages.
+    communication, with no broker or server process. Supports wildcard topics
+    and graceful shutdown on termination signals. Messages are compatible with
+    the Python 'formix-pubsub' library, so R and Python processes can exchange
+    them.
 License: MIT + file LICENSE
 Copyright: See inst/COPYRIGHTS. src/sigterm.c is adapted from the 'sigterm'
     package, Copyright Aaron Jacobs, under the Apache License 2.0.
