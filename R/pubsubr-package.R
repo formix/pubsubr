@@ -9,3 +9,12 @@
 #'
 #' @keywords internal
 "_PACKAGE"
+
+# Logging goes through the logger package, in the "pubsubr" namespace. Like
+# Python's logging default, only WARN and above are emitted; messages are
+# formatted with sprintf(). Users can change this with, for example,
+# logger::log_threshold(logger::INFO, namespace = "pubsubr").
+.onLoad <- function(libname, pkgname) {
+  logger::log_formatter(logger::formatter_sprintf, namespace = "pubsubr")
+  logger::log_threshold(logger::WARN, namespace = "pubsubr")
+}

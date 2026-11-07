@@ -13,19 +13,3 @@
     list(message = message, call = sys.call(-1), parent = parent)
   ))
 }
-
-# Minimal equivalent of Python's logging module default configuration: only
-# WARNING and above are emitted, on stderr. The threshold is set with
-# options(pubsubr.log_level = "INFO").
-.log_levels <- c(DEBUG = 10L, INFO = 20L, WARNING = 30L, ERROR = 40L)
-
-.log <- function(level, fmt, ...) {
-  threshold <- toupper(getOption("pubsubr.log_level", "WARNING"))
-  threshold <- if (threshold %in% names(.log_levels)) .log_levels[[threshold]] else 30L
-  if (.log_levels[[level]] >= threshold) {
-    text <- if (length(list(...)) > 0L) sprintf(fmt, ...) else fmt
-    message(sprintf("%s:pubsubr:%s", level, text))
-  }
-  invisible(NULL)
-}
-

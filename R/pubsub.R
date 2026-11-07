@@ -123,7 +123,7 @@ publish <- function(topic, data, headers = NULL) {
     }
     queue_path <- file.path(channel_dir, "queue")
     if (!file.exists(queue_path)) {
-      .log("WARNING", "Channel directory %s does not contain a queue file. Skipping.",
+      logger::log_warn("Channel directory %s does not contain a queue file. Skipping.",
            channel_dir)
       next
     }
@@ -136,7 +136,7 @@ publish <- function(topic, data, headers = NULL) {
           message$id, channel_dir, publication_count
         ))
       }
-      .log("WARNING", "Failed to publish message %s to %s: cannot link '%s' to '%s'",
+      logger::log_warn("Failed to publish message %s to %s: cannot link '%s' to '%s'",
            message$id, queue_path, message_temp_file, message_file_path)
       next
     }
@@ -154,11 +154,11 @@ publish <- function(topic, data, headers = NULL) {
         )
       },
       warning = function(e) {
-        .log("WARNING", "Failed to publish message %s to %s: %s",
+        logger::log_warn("Failed to publish message %s to %s: %s",
              message$id, queue_path, conditionMessage(e))
       },
       error = function(e) {
-        .log("WARNING", "Failed to publish message %s to %s: %s",
+        logger::log_warn("Failed to publish message %s to %s: %s",
              message$id, queue_path, conditionMessage(e))
       }
     )
@@ -272,7 +272,7 @@ subscribe <- function(channel, callback, timeout_seconds = 0) {
            (listen_forever || (.time_seconds() - start_time < timeout_seconds))) {
       if (.Call(C_pubsubr_sigterm_received)) {
         shutdown_requested <- TRUE
-        .log("INFO", "Received termination signal, exiting subscribe loop...")
+        logger::log_info("Received termination signal, exiting subscribe loop...")
         break
       }
       suspendInterrupts({
@@ -281,7 +281,7 @@ subscribe <- function(channel, callback, timeout_seconds = 0) {
           tryCatch(
             callback(message),
             error = function(e) {
-              .log("WARNING", "Error processing message %s: %s",
+              logger::log_warn("Error processing message %s: %s",
                    format(message), conditionMessage(e))
             }
           )
@@ -292,11 +292,11 @@ subscribe <- function(channel, callback, timeout_seconds = 0) {
     },
     interrupt = function(sig) {
       shutdown_requested <<- TRUE
-      .log("INFO", "Received termination signal, exiting subscribe loop...")
+      logger::log_info("Received termination signal, exiting subscribe loop...")
     }
   )
   if (shutdown_requested) {
-    .log("INFO", "Exiting subscribe loop on '%s'. Handled %i messages.",
+    logger::log_info("Exiting subscribe loop on '%s'. Handled %i messages.",
          channel$topic, message_count)
     return(-1L) # Indicate shutdown by signal
   }

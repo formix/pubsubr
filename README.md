@@ -217,9 +217,10 @@ special setting is needed in the unit file.
 |---------------------|-------------|---------|
 | `PUBSUB_HOME` | Directory for channel and message storage | `/dev/shm/pubsub` on Linux, system temp dir elsewhere |
 
-| R option | Description | Default |
-|----------|-------------|---------|
-| `pubsubr.log_level` | Minimum level of log messages (`DEBUG`, `INFO`, `WARNING`, `ERROR`) | `WARNING` |
+Logging uses the [logger](https://daroczig.github.io/logger/) package, in the
+`pubsubr` namespace. Only warnings and errors are logged by default; for example,
+`logger::log_threshold(logger::INFO, namespace = "pubsubr")` also shows progress
+messages, and `logger::log_appender()` redirects them.
 
 ## API Summary
 
@@ -238,7 +239,7 @@ special setting is needed in the unit file.
 | `with channel:` | `with_channel(channel, { ... })` |
 | `Channel.active_paths()` | `active_channel_paths()` |
 | `ValueError`, `RuntimeError`, `TypeError`, `OSError` | conditions of class `value_error`, `runtime_error`, `type_error`, `os_error` |
-| `logging` | `message()` on stderr, filtered by the `pubsubr.log_level` option |
+| `logging` | the `logger` package, `pubsubr` namespace |
 | 64-bit integer ids | strings of decimal digits, since ids use up to 63 bits and doubles are exact only up to 2^53 |
 | 64-bit integer timestamps | doubles, exact up to 2^53 (current microsecond timestamps are around 2^51) |
 | SIGTERM and SIGINT handled by `subscribe()` | SIGINT as an R `interrupt` condition; SIGTERM with an embedded C handler |
