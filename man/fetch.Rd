@@ -19,3 +19,17 @@ and `value_error` if the message format is invalid.
 Reads an 8-byte message ID from the FIFO queue, then loads the actual
 message from the corresponding file.
 }
+\examples{
+old <- Sys.getenv("PUBSUB_HOME", unset = NA)
+Sys.setenv(PUBSUB_HOME = file.path(tempdir(), "pubsub-example"))
+
+channel <- Channel("greetings")
+with_channel(channel, {
+  fetch(channel)  # NULL: nothing was published yet
+  publish("greetings", charToRaw("hello"))
+  message <- fetch(channel)
+  rawToChar(message$content)
+})
+
+if (is.na(old)) Sys.unsetenv("PUBSUB_HOME") else Sys.setenv(PUBSUB_HOME = old)
+}

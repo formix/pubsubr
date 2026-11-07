@@ -14,7 +14,7 @@
  * Licensed under the Apache License, Version 2.0; see
  * inst/licenses/LICENSE-APACHE-2.0 and inst/COPYRIGHTS.
  *
- * Modifications from the original, by formix (2026):
+ * Modifications from the original, by Jean-Philippe Gravel (2026):
  *   - The handler is installed only while subscribe() runs, and the previous
  *     SIGTERM handler is restored afterwards (the original installed it for
  *     the whole session when the package was loaded).

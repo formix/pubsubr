@@ -7,6 +7,10 @@
 #' `MESSAGE_MAGIC_NUMBER` the magic number identifying the format
 #' (`"PMSG"` in ASCII).
 #'
+#' @examples
+#' MESSAGE_FORMAT_VERSION
+#' SUPPORTED_MESSAGE_VERSIONS
+#' format(as.hexmode(MESSAGE_MAGIC_NUMBER))
 #' @name message-constants
 #' @export
 MESSAGE_FORMAT_VERSION <- 1L
@@ -59,6 +63,12 @@ MESSAGE_MAGIC_NUMBER <- 0x504D5347
 #'   \item{`content`}{The message payload as a raw vector.}
 #'   \item{`headers`}{Named list of metadata.}
 #' }
+#' @examples
+#' message <- Message("sensors.temperature", charToRaw("21.5"),
+#'                    headers = list(unit = "celsius"))
+#' message
+#' message$topic
+#' rawToChar(message$content)
 #' @export
 Message <- function(topic, content, headers = NULL) {
   structure(
@@ -111,6 +121,14 @@ print.Message <- function(x, ...) {
 #' @param message A [Message].
 #' @param stream Binary connection to write to.
 #' @return `message`, invisibly.
+#' @examples
+#' message <- Message("demo", charToRaw("hello"))
+#' path <- tempfile()
+#' con <- file(path, "wb")
+#' write_message(message, con)
+#' close(con)
+#' file.size(path)
+#' unlink(path)
 #' @export
 write_message <- function(message, stream) {
   if (!is.raw(message$content)) {
@@ -143,6 +161,9 @@ write_message <- function(message, stream) {
 #'
 #' @param message A [Message].
 #' @return The serialized message as a raw vector.
+#' @examples
+#' bytes <- message_to_bytes(Message("demo", charToRaw("hello")))
+#' head(bytes, 4)  # the "PMSG" magic number
 #' @export
 message_to_bytes <- function(message) {
   stream <- rawConnection(raw(0), "wb")
@@ -155,6 +176,12 @@ message_to_bytes <- function(message) {
 #'
 #' @param stream Binary connection to read from.
 #' @return A [Message].
+#' @examples
+#' bytes <- message_to_bytes(Message("demo", charToRaw("hello")))
+#' con <- rawConnection(bytes, "rb")
+#' message <- read_message(con)
+#' close(con)
+#' message$topic
 #' @export
 read_message <- function(stream) {
   # Read and validate magic number
@@ -217,6 +244,10 @@ read_message <- function(stream) {
 #'
 #' @param data A raw vector produced by [message_to_bytes()].
 #' @return A [Message].
+#' @examples
+#' bytes <- message_to_bytes(Message("demo", charToRaw("hello")))
+#' message <- message_from_bytes(bytes)
+#' rawToChar(message$content)
 #' @export
 message_from_bytes <- function(data) {
   stream <- rawConnection(data, "rb")

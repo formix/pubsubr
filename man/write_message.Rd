@@ -30,3 +30,12 @@ Binary format:
 }
 All integers are big-endian.
 }
+\examples{
+message <- Message("demo", charToRaw("hello"))
+path <- tempfile()
+con <- file(path, "wb")
+write_message(message, con)
+close(con)
+file.size(path)
+unlink(path)
+}

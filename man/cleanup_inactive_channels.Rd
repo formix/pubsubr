@@ -14,3 +14,9 @@ Inactive channels are those where the associated process is no longer
 running. This removes their directories and any unconsumed messages to
 free up resources.
 }
+\examples{
+old <- Sys.getenv("PUBSUB_HOME", unset = NA)
+Sys.setenv(PUBSUB_HOME = file.path(tempdir(), "pubsub-example"))
+cleanup_inactive_channels()
+if (is.na(old)) Sys.unsetenv("PUBSUB_HOME") else Sys.setenv(PUBSUB_HOME = old)
+}

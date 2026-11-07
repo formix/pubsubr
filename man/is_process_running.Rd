@@ -16,3 +16,7 @@ is_process_running(pid)
 Uses signal 0 (`tools::pskill(pid, 0)`, like Python's `os.kill(pid, 0)`),
 which does not send a signal but checks whether the process exists.
 }
+\examples{
+is_process_running(Sys.getpid())
+is_process_running(-1)
+}

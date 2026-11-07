@@ -4,7 +4,7 @@ pubsubr
 pubsubr is a translation of the Python library formix-pubsub
 (https://github.com/formix/pubsub).
 
-Copyright (c) 2026 formix
+Copyright (c) 2026 Jean-Philippe Gravel
 Licensed under the MIT License; see the LICENSE.md file.
 
 

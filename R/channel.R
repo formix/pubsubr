@@ -44,6 +44,18 @@
 #' @param topic The topic string (dot-separated terms with optional
 #'   wildcards).
 #' @return A list of class `"Channel"`.
+#' @examples
+#' old <- Sys.getenv("PUBSUB_HOME", unset = NA)
+#' Sys.setenv(PUBSUB_HOME = file.path(tempdir(), "pubsub-example"))
+#'
+#' channel <- Channel("weather.=.alerts")
+#' channel
+#' open(channel)
+#' publish("weather.paris.alerts", charToRaw("storm"))
+#' rawToChar(fetch(channel)$content)
+#' close(channel)
+#'
+#' if (is.na(old)) Sys.unsetenv("PUBSUB_HOME") else Sys.setenv(PUBSUB_HOME = old)
 #' @export
 Channel <- function(topic) {
   .validate_topic_pattern(topic)
@@ -308,6 +320,11 @@ print.Channel <- function(x, ...) {
 #' free up resources.
 #'
 #' @return `NULL`, invisibly.
+#' @examples
+#' old <- Sys.getenv("PUBSUB_HOME", unset = NA)
+#' Sys.setenv(PUBSUB_HOME = file.path(tempdir(), "pubsub-example"))
+#' cleanup_inactive_channels()
+#' if (is.na(old)) Sys.unsetenv("PUBSUB_HOME") else Sys.setenv(PUBSUB_HOME = old)
 #' @export
 cleanup_inactive_channels <- function() {
   for (path in inactive_channel_paths()) {
@@ -358,6 +375,16 @@ cleanup_inactive_channels <- function() {
 #' is still running, `inactive_channel_paths()` those where it is not.
 #'
 #' @return A sorted character vector of directory paths.
+#' @examples
+#' old <- Sys.getenv("PUBSUB_HOME", unset = NA)
+#' Sys.setenv(PUBSUB_HOME = file.path(tempdir(), "pubsub-example"))
+#'
+#' with_channel(Channel("news"), {
+#'   basename(active_channel_paths())
+#' })
+#' inactive_channel_paths()
+#'
+#' if (is.na(old)) Sys.unsetenv("PUBSUB_HOME") else Sys.setenv(PUBSUB_HOME = old)
 #' @export
 active_channel_paths <- function() {
   .channel_paths(active = TRUE)
@@ -378,6 +405,20 @@ inactive_channel_paths <- function() {
 #' @param code An expression to evaluate, or a function that receives the open
 #'   channel.
 #' @return The value of `code`.
+#' @examples
+#' old <- Sys.getenv("PUBSUB_HOME", unset = NA)
+#' Sys.setenv(PUBSUB_HOME = file.path(tempdir(), "pubsub-example"))
+#'
+#' channel <- Channel("jobs")
+#' with_channel(channel, {
+#'   publish("jobs", charToRaw("job-1"))
+#'   rawToChar(fetch(channel)$content)
+#' })
+#'
+#' # The function form receives the open channel
+#' with_channel(Channel("jobs"), function(ch) ch$topic)
+#'
+#' if (is.na(old)) Sys.unsetenv("PUBSUB_HOME") else Sys.setenv(PUBSUB_HOME = old)
 #' @export
 with_channel <- function(channel, code) {
   open(channel)

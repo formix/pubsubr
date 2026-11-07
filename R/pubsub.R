@@ -74,6 +74,20 @@
 #' contains invalid characters (must be `[a-zA-Z0-9.-]`), `type_error` if
 #' `data` is not a raw vector, and `runtime_error` if the message id already
 #' exists (id collision), in the temporary directory or in a matching channel.
+#' @examples
+#' old <- Sys.getenv("PUBSUB_HOME", unset = NA)
+#' Sys.setenv(PUBSUB_HOME = file.path(tempdir(), "pubsub-example"))
+#'
+#' # Nobody is listening yet: the message reaches 0 channels
+#' publish("sensors.temperature", charToRaw("21.5"))
+#'
+#' channel <- Channel("sensors.+")
+#' with_channel(channel, {
+#'   publish("sensors.temperature", charToRaw("21.5"),
+#'           headers = list(unit = "celsius"))
+#' })
+#'
+#' if (is.na(old)) Sys.unsetenv("PUBSUB_HOME") else Sys.setenv(PUBSUB_HOME = old)
 #' @export
 publish <- function(topic, data, headers = NULL) {
   if (is.character(topic) && length(topic) == 1L && !is.na(topic) &&
@@ -180,6 +194,19 @@ publish <- function(topic, data, headers = NULL) {
 #'
 #' Errors have class `runtime_error` if the channel is not open for reading,
 #' and `value_error` if the message format is invalid.
+#' @examples
+#' old <- Sys.getenv("PUBSUB_HOME", unset = NA)
+#' Sys.setenv(PUBSUB_HOME = file.path(tempdir(), "pubsub-example"))
+#'
+#' channel <- Channel("greetings")
+#' with_channel(channel, {
+#'   fetch(channel)  # NULL: nothing was published yet
+#'   publish("greetings", charToRaw("hello"))
+#'   message <- fetch(channel)
+#'   rawToChar(message$content)
+#' })
+#'
+#' if (is.na(old)) Sys.unsetenv("PUBSUB_HOME") else Sys.setenv(PUBSUB_HOME = old)
 #' @export
 fetch <- function(channel) {
   if (!.channel_is_open(channel)) {
@@ -250,6 +277,20 @@ fetch <- function(channel) {
 #'
 #' Errors have class `runtime_error` if the channel is not open for reading
 #' and `value_error` if `timeout_seconds` is negative.
+#' @examples
+#' old <- Sys.getenv("PUBSUB_HOME", unset = NA)
+#' Sys.setenv(PUBSUB_HOME = file.path(tempdir(), "pubsub-example"))
+#'
+#' channel <- Channel("events.=")
+#' with_channel(channel, {
+#'   publish("events.start", charToRaw("go"))
+#'   # Listen for half a second, printing each message received
+#'   subscribe(channel, function(message) {
+#'     cat(message$topic, ":", rawToChar(message$content), "\n")
+#'   }, timeout_seconds = 0.5)
+#' })
+#'
+#' if (is.na(old)) Sys.unsetenv("PUBSUB_HOME") else Sys.setenv(PUBSUB_HOME = old)
 #' @useDynLib pubsubr, .registration = TRUE
 #' @export
 subscribe <- function(channel, callback, timeout_seconds = 0) {

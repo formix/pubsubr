@@ -11,18 +11,23 @@
 #' On Unix-like systems, prefers `/dev/shm` if available for better
 #' performance.
 #'
-#' The result is cached after the first call for performance.
+#' The default location is cached after the first call for performance. The
+#' `PUBSUB_HOME` variable is read at every call.
 #'
 #' @return The base directory path for pubsub storage (character).
+#' @examples
+#' old <- Sys.getenv("PUBSUB_HOME", unset = NA)
+#' Sys.setenv(PUBSUB_HOME = file.path(tempdir(), "pubsub-example"))
+#' get_base_dir()
+#' if (is.na(old)) Sys.unsetenv("PUBSUB_HOME") else Sys.setenv(PUBSUB_HOME = old)
 #' @export
 get_base_dir <- function() {
-  if (!is.null(.pubsub_state$base_dir_cache)) {
-    return(.pubsub_state$base_dir_cache)
-  }
-
   env_dir <- Sys.getenv("PUBSUB_HOME", unset = "")
   if (nzchar(env_dir)) {
-    .pubsub_state$base_dir_cache <- env_dir
+    return(env_dir)
+  }
+
+  if (!is.null(.pubsub_state$base_dir_cache)) {
     return(.pubsub_state$base_dir_cache)
   }
 
@@ -67,6 +72,9 @@ get_base_dir <- function() {
 #'
 #' @param pid The process ID to check.
 #' @return `TRUE` if the process is running, `FALSE` otherwise.
+#' @examples
+#' is_process_running(Sys.getpid())
+#' is_process_running(-1)
 #' @export
 is_process_running <- function(pid) {
   pid <- suppressWarnings(as.numeric(pid))

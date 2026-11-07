@@ -62,3 +62,10 @@ Messages are read with [read_message()] from a binary connection and
 deserialized from a raw vector with [message_from_bytes()]. They are
 written with [write_message()] and serialized with [message_to_bytes()].
 }
+\examples{
+message <- Message("sensors.temperature", charToRaw("21.5"),
+                   headers = list(unit = "celsius"))
+message
+message$topic
+rawToChar(message$content)
+}

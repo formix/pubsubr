@@ -19,3 +19,18 @@ The value of `code`.
 Equivalent of Python's `with channel:` block: opens the channel, evaluates
 `code`, then closes and cleans up the channel even if an error occurs.
 }
+\examples{
+old <- Sys.getenv("PUBSUB_HOME", unset = NA)
+Sys.setenv(PUBSUB_HOME = file.path(tempdir(), "pubsub-example"))
+
+channel <- Channel("jobs")
+with_channel(channel, {
+  publish("jobs", charToRaw("job-1"))
+  rawToChar(fetch(channel)$content)
+})
+
+# The function form receives the open channel
+with_channel(Channel("jobs"), function(ch) ch$topic)
+
+if (is.na(old)) Sys.unsetenv("PUBSUB_HOME") else Sys.setenv(PUBSUB_HOME = old)
+}

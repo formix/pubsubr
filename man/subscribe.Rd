@@ -49,3 +49,18 @@ returns -1.
 Requires R >= 3.5.0, for `suspendInterrupts()`.
 }
 
+\examples{
+old <- Sys.getenv("PUBSUB_HOME", unset = NA)
+Sys.setenv(PUBSUB_HOME = file.path(tempdir(), "pubsub-example"))
+
+channel <- Channel("events.=")
+with_channel(channel, {
+  publish("events.start", charToRaw("go"))
+  # Listen for half a second, printing each message received
+  subscribe(channel, function(message) {
+    cat(message$topic, ":", rawToChar(message$content), "\n")
+  }, timeout_seconds = 0.5)
+})
+
+if (is.na(old)) Sys.unsetenv("PUBSUB_HOME") else Sys.setenv(PUBSUB_HOME = old)
+}

@@ -247,6 +247,19 @@ alone with the `namespace` argument, for example
 | SIGTERM and SIGINT handled by `subscribe()` | SIGINT as an R `interrupt` condition; SIGTERM with an embedded C handler |
 | threads / `multiprocessing` in tests | forked processes with `parallel::mcparallel` |
 
+## Versioning
+
+pubsubr is a translation of the Python library
+[formix-pubsub](https://github.com/formix/pubsub) and shares its on-disk and
+wire formats, so that R and Python processes can exchange messages. The two
+libraries are versioned together: pubsubr 1.0.2 corresponds to formix-pubsub
+1.0.2, and the version number is kept the same on both sides so that it tells
+which release of the other library a given release is compatible with.
+
+For this reason the first CRAN release is 1.0.2 instead of 1.0.0 or 0.1.0:
+the number is not a count of releases on CRAN, it is the version of the
+shared protocol and API.
+
 ## Development
 
 ```bash

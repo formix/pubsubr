@@ -16,3 +16,14 @@ A sorted character vector of directory paths.
 `active_channel_paths()` only includes channels where the associated process
 is still running, `inactive_channel_paths()` those where it is not.
 }
+\examples{
+old <- Sys.getenv("PUBSUB_HOME", unset = NA)
+Sys.setenv(PUBSUB_HOME = file.path(tempdir(), "pubsub-example"))
+
+with_channel(Channel("news"), {
+  basename(active_channel_paths())
+})
+inactive_channel_paths()
+
+if (is.na(old)) Sys.unsetenv("PUBSUB_HOME") else Sys.setenv(PUBSUB_HOME = old)
+}

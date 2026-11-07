@@ -15,3 +15,7 @@ The serialized message as a raw vector.
 \description{
 Convenience function to serialize a message with [write_message()].
 }
+\examples{
+bytes <- message_to_bytes(Message("demo", charToRaw("hello")))
+head(bytes, 4)  # the "PMSG" magic number
+}

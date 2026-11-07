@@ -3,7 +3,7 @@ Type: Package
 Title: Serverless Publish-Subscribe Interprocess Messaging
 Version: 1.0.2
 Authors@R: c(
-    person("formix", email = "formixian@gmail.com",
+    person("Jean-Philippe", "Gravel", email = "jeanphilippe.gravel@gmail.com",
            role = c("aut", "cre")),
     person("Aaron", "Jacobs", role = c("ctb", "cph"),
            comment = "Author of the 'sigterm' package, from which src/sigterm.c is adapted")
@@ -11,15 +11,10 @@ Authors@R: c(
 Description: A serverless publish-subscribe library for local interprocess
     communication. Messages are routed through kernel FIFO named pipes and
     stored on the shared-memory filesystem ('/dev/shm' on Linux), with no
-    broker or server process. This is a literal translation of the Python
-    'formix-pubsub' library and uses the same on-disk and wire formats, so R
-    and Python processes can exchange messages. Requires R >= 3.5.0 for
-    suspendInterrupts(), so that an interrupt (SIGINT, caught as an
-    'interrupt' condition) never stops a message half-processed. SIGTERM,
-    which base R cannot catch, is caught by a small C handler adapted from
-    the 'sigterm' package (<https://github.com/atheriel/sigterm>), which is
-    not available on CRAN and is therefore embedded instead of used as a
-    dependency.
+    broker or server process. Topics support wildcards, and a subscriber can
+    shut down gracefully on SIGINT or SIGTERM. This is a translation of the
+    Python 'formix-pubsub' library and uses the same on-disk and wire formats,
+    so R and Python processes can exchange messages.
 License: MIT + file LICENSE
 Copyright: See inst/COPYRIGHTS. src/sigterm.c is adapted from the 'sigterm'
     package, Copyright Aaron Jacobs, under the Apache License 2.0.

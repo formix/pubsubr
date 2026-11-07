@@ -15,3 +15,8 @@ A [Message].
 \description{
 Deserialize a message from bytes
 }
+\examples{
+bytes <- message_to_bytes(Message("demo", charToRaw("hello")))
+message <- message_from_bytes(bytes)
+rawToChar(message$content)
+}

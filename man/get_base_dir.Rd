@@ -16,5 +16,12 @@ On Unix-like systems, prefers `/dev/shm` if available for better
 performance.
 }
 \details{
-The result is cached after the first call for performance.
+The default location is cached after the first call for performance. The
+`PUBSUB_HOME` variable is read at every call.
+}
+\examples{
+old <- Sys.getenv("PUBSUB_HOME", unset = NA)
+Sys.setenv(PUBSUB_HOME = file.path(tempdir(), "pubsub-example"))
+get_base_dir()
+if (is.na(old)) Sys.unsetenv("PUBSUB_HOME") else Sys.setenv(PUBSUB_HOME = old)
 }

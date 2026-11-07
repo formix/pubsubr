@@ -23,11 +23,11 @@ Useful links:
 
 }
 \author{
-\strong{Maintainer}: formix \email{formixian@gmail.com}
+\strong{Maintainer}: Jean-Philippe Gravel \email{jeanphilippe.gravel@gmail.com}
 
 Authors:
 \itemize{
-  \item formix \email{formixian@gmail.com}
+  \item Jean-Philippe Gravel \email{jeanphilippe.gravel@gmail.com}
 }
 
 Other contributors:

@@ -15,3 +15,10 @@ A [Message].
 \description{
 Read a message from a binary connection
 }
+\examples{
+bytes <- message_to_bytes(Message("demo", charToRaw("hello")))
+con <- rawConnection(bytes, "rb")
+message <- read_message(con)
+close(con)
+message$topic
+}

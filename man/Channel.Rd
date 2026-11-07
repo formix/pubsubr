@@ -70,3 +70,16 @@ representation. Use [with_channel()] in place of Python's `with channel:`
 block. The Python static methods are [active_channel_paths()],
 [inactive_channel_paths()] and [cleanup_inactive_channels()].
 }
+\examples{
+old <- Sys.getenv("PUBSUB_HOME", unset = NA)
+Sys.setenv(PUBSUB_HOME = file.path(tempdir(), "pubsub-example"))
+
+channel <- Channel("weather.=.alerts")
+channel
+open(channel)
+publish("weather.paris.alerts", charToRaw("storm"))
+rawToChar(fetch(channel)$content)
+close(channel)
+
+if (is.na(old)) Sys.unsetenv("PUBSUB_HOME") else Sys.setenv(PUBSUB_HOME = old)
+}

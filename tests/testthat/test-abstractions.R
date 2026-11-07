@@ -6,13 +6,23 @@ reset_base_dir <- function(env = parent.frame()) {
   withr::defer(.pubsub_state$base_dir_cache <- NULL, envir = env)
 }
 
-test_that("get_base_dir uses PUBSUB_HOME and caches the result", {
+test_that("get_base_dir uses PUBSUB_HOME, read at every call", {
   reset_base_dir()
   withr::local_envvar(PUBSUB_HOME = "/custom/home")
   expect_equal(get_base_dir(), "/custom/home")
 
   Sys.setenv(PUBSUB_HOME = "/other/home")
-  expect_equal(get_base_dir(), "/custom/home") # cached
+  expect_equal(get_base_dir(), "/other/home")
+})
+
+test_that("get_base_dir caches the default directory", {
+  withr::local_envvar(PUBSUB_HOME = NA, TMPDIR = "/some/tmp/")
+  reset_base_dir()
+  local_mocked_bindings(dir.exists = function(paths) TRUE, .package = "base")
+  expect_equal(get_base_dir(), "/dev/shm/pubsub")
+
+  local_mocked_bindings(dir.exists = function(paths) FALSE, .package = "base")
+  expect_equal(get_base_dir(), "/dev/shm/pubsub") # cached
 })
 
 test_that("get_base_dir defaults to a pubsub directory in /dev/shm or the temp dir", {

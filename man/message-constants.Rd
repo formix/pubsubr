@@ -19,3 +19,8 @@ MESSAGE_MAGIC_NUMBER
 `MESSAGE_MAGIC_NUMBER` the magic number identifying the format
 (`"PMSG"` in ASCII).
 }
+\examples{
+MESSAGE_FORMAT_VERSION
+SUPPORTED_MESSAGE_VERSIONS
+format(as.hexmode(MESSAGE_MAGIC_NUMBER))
+}

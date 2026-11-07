@@ -27,3 +27,18 @@ exists (id collision), in the temporary directory or in a matching channel.
 The message is delivered to every active channel whose topic matches `topic`
 (see [Channel()] for the wildcard rules).
 }
+\examples{
+old <- Sys.getenv("PUBSUB_HOME", unset = NA)
+Sys.setenv(PUBSUB_HOME = file.path(tempdir(), "pubsub-example"))
+
+# Nobody is listening yet: the message reaches 0 channels
+publish("sensors.temperature", charToRaw("21.5"))
+
+channel <- Channel("sensors.+")
+with_channel(channel, {
+  publish("sensors.temperature", charToRaw("21.5"),
+          headers = list(unit = "celsius"))
+})
+
+if (is.na(old)) Sys.unsetenv("PUBSUB_HOME") else Sys.setenv(PUBSUB_HOME = old)
+}
