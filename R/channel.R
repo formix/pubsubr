@@ -8,7 +8,7 @@
 #' queue, and returns it as an old-style (S3) object: a list of class
 #' `"Channel"`.
 #'
-#' The channel directory is named `{topic}_{random_12_chars}_{process_id}` and
+#' The channel directory is named `<topic>_<random_12_chars>_<process_id>` and
 #' holds a non-blocking FIFO named `queue`, created and read with
 #' [base::fifo()].
 #'
@@ -26,7 +26,7 @@
 #'   \item{`topic`}{The topic string.}
 #'   \item{`process_id`}{The id of the process that owns the channel.}
 #'   \item{`random_id`}{A random 12-character string.}
-#'   \item{`directory_name`}{`{topic}_{random_id}_{process_id}`.}
+#'   \item{`directory_name`}{`<topic>_<random_id>_<process_id>`.}
 #'   \item{`directory_path`}{Full path of the channel directory.}
 #'   \item{`queue_path`}{Full path of the channel FIFO.}
 #'   \item{`state`}{An environment holding the open FIFO connection (the one

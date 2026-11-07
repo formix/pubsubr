@@ -21,6 +21,8 @@ collect_child <- function(job) {
   result
 }
 
+# Forked processes and timing make these tests too fragile for CRAN's machines.
 skip_if_no_fork <- function() {
+  skip_on_cran()
   skip_on_os("windows")
 }

@@ -2,7 +2,7 @@ Package: pubsubr
 Type: Package
 Title: Serverless Publish-Subscribe Interprocess Messaging
 Version: 1.0.2
-Authors@R: person("formix", email = "formix@users.noreply.github.com",
+Authors@R: person("formix", email = "formixian@gmail.com",
     role = c("aut", "cre"))
 Description: A serverless publish-subscribe library for local interprocess
     communication. Messages are routed through kernel FIFO named pipes and

@@ -320,6 +320,7 @@ test_that("subscribe receives messages", {
 })
 
 test_that("subscribe timeout", {
+  skip_on_cran() # asserts on elapsed wall-clock time
   topic <- "test.subscribe.timeout"
   channel <- Channel(topic = topic)
   received_messages <- list()

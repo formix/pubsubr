@@ -6,3 +6,4 @@ src/*.so
 src/*.dll
 *.tar.gz
 pubsubr.Rcheck/
+dist/

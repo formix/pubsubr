@@ -23,11 +23,11 @@ Useful links:
 
 }
 \author{
-\strong{Maintainer}: formix \email{formix@users.noreply.github.com}
+\strong{Maintainer}: formix \email{formixian@gmail.com}
 
 Authors:
 \itemize{
-  \item formix \email{formix@users.noreply.github.com}
+  \item formix \email{formixian@gmail.com}
 }
 
 }
