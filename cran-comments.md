@@ -13,6 +13,7 @@ translation using the same on-disk and wire formats.
 
 0 errors | 0 warnings | 1 note
 
+* NOTE (expected on CRAN's incoming check): "New submission".
 * NOTE: "Compilation used the following non-portable flag(s):
   '-mno-omit-leaf-frame-pointer'". This comes from the Debian/Ubuntu R build
   configuration, not from the package.
