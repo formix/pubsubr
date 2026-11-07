@@ -6,3 +6,5 @@
 ^deploy\.sh$
 ^dist$
 ^cran-comments\.md$
+^coverage\.sh$
+^coverage$

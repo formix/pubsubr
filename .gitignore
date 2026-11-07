@@ -7,3 +7,6 @@ src/*.dll
 *.tar.gz
 pubsubr.Rcheck/
 dist/
+coverage/
+*.gcda
+*.gcno
