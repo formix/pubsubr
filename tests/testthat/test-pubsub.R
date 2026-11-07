@@ -288,6 +288,20 @@ test_that("fetch on closed channel", {
 
 # ---------------------------------------------------------------- subscribe
 
+test_that("fetch returns NULL while a publisher has the queue open but wrote nothing", {
+  # Not in the Python test suite: reading a non-blocking fifo that has a writer
+  # but no data fails with EAGAIN, which R reports as a read error. Python's
+  # equivalent, BlockingIOError, means "no message yet".
+  channel <- Channel(topic = "test.fetch.writer")
+
+  with_channel(channel, {
+    writer <- fifo(channel$queue_path, open = "wb", blocking = FALSE)
+    withr::defer(close(writer))
+
+    expect_null(fetch(channel))
+  })
+})
+
 test_that("subscribe receives messages", {
   skip_if_no_fork()
   topic <- "test.subscribe.receive"
@@ -421,11 +435,9 @@ test_that("subscribe returns -1 on SIGINT", {
   expect_equal(result, -1)
 })
 
-test_that("subscribe returns -1 on SIGTERM with the sigterm package", {
-  # Not in the Python test suite: SIGTERM can only be caught with the optional
-  # sigterm package.
+test_that("subscribe returns -1 on SIGTERM", {
+  # Not in the Python test suite: SIGTERM is caught by the embedded C handler.
   skip_if_no_fork()
-  skip_if_not_installed("sigterm")
   topic <- "test.subscribe.sigterm"
 
   sub_proc <- start_child({
@@ -433,7 +445,7 @@ test_that("subscribe returns -1 on SIGTERM with the sigterm package", {
     with_channel(channel, subscribe(channel, function(message) NULL))
   })
 
-  Sys.sleep(0.5) # Ensure subscriber is ready and sigterm is loaded
+  Sys.sleep(0.5) # Ensure subscriber is ready and the handler is installed
   tools::pskill(sub_proc$pid, tools::SIGTERM)
   result <- collect_child(sub_proc)
 

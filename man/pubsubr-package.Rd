@@ -30,5 +30,10 @@ Authors:
   \item formix \email{formixian@gmail.com}
 }
 
+Other contributors:
+\itemize{
+  \item Aaron Jacobs (Author of the 'sigterm' package, from which src/sigterm.c is adapted) [contributor, copyright holder]
+}
+
 }
 \keyword{internal}

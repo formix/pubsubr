@@ -14,7 +14,7 @@ same machine can publish and subscribe to each other**.
 Unlike traditional pub/sub systems (Redis, RabbitMQ, ZeroMQ), **pubsubr requires no broker, no server process, and no external service**. Messages are routed through kernel FIFO named pipes and stored on the shared-memory filesystem (`/dev/shm` on Linux), making communication fast and entirely local.
 
 - **No infrastructure**: install and use, nothing to start or configure
-- **Pure R**: no compiled code; FIFOs use base R `fifo()` connections. Its only dependency is `jsonlite`
+- **Almost pure R**: FIFOs use base R `fifo()` connections, and a small C file catches SIGTERM. Its only dependency is `jsonlite`
 - **Automatic cleanup**: channels are tied to process IDs; stale channels from crashed processes are detected and cleaned up automatically
 - **Messages persist until consumed**: published messages are stored as files and delivered to all matching subscribers
 
@@ -27,14 +27,6 @@ remotes::install_github("formix/pubsubr")
 
 Requires **R 3.5.0 or later** (for `suspendInterrupts()`) on a Unix-like
 system (Linux, macOS).
-
-To let `subscribe()` stop gracefully on SIGTERM, also install the optional
-[sigterm](https://github.com/atheriel/sigterm) package (see
-[Signals](#signals)):
-
-```r
-remotes::install_github("atheriel/sigterm")
-```
 
 ## Quick Start: Publish & Subscribe Across Processes
 
@@ -50,8 +42,7 @@ with_channel(channel, {
     cat("Received:", rawToChar(msg$content), "\n")
   }
 
-  # Blocks and listens until terminated with Ctrl+C (SIGINT), or SIGTERM
-  # when the sigterm package is installed
+  # Blocks and listens until terminated with Ctrl+C (SIGINT) or SIGTERM
   subscribe(channel, on_message)
 })
 ```
@@ -208,20 +199,17 @@ returning -1, when it receives:
   caught with `tryCatch(..., interrupt = function(sig) ...)`. Interrupts are
   suspended while a message is fetched and handled, with
   `suspendInterrupts()` (R >= 3.5.0).
-- **SIGTERM**, only when the [sigterm](https://github.com/atheriel/sigterm)
-  package is installed. Base R cannot catch SIGTERM, so without sigterm the
-  process ends immediately and its channel is removed later by
-  `cleanup_inactive_channels()`. Once sigterm is loaded, R no longer exits on
-  SIGTERM: let your script end after `subscribe()` returns -1.
+- **SIGTERM**: base R cannot catch it, so a small C handler (adapted from the
+  [sigterm](https://github.com/atheriel/sigterm) package) sets a flag that
+  `subscribe()` polls. The code is embedded in pubsubr, with the original
+  Apache-2.0 license and copyright notice kept (see `inst/COPYRIGHTS`),
+  because the sigterm package is not available on CRAN and so cannot be a
+  dependency. The handler is installed only while `subscribe()` runs
+  and the previous one is restored afterwards. R does not exit on SIGTERM
+  during that time: let your script end after `subscribe()` returns -1.
 
-`systemctl stop` sends SIGTERM by default. Without the sigterm package, set
-`KillSignal=SIGINT` in the unit file to get the same graceful shutdown:
-
-```ini
-[Service]
-ExecStart=/usr/bin/Rscript /path/to/subscriber.R
-KillSignal=SIGINT
-```
+`systemctl stop` sends SIGTERM by default, which `subscribe()` handles, so no
+special setting is needed in the unit file.
 
 ## Configuration
 
@@ -253,7 +241,7 @@ KillSignal=SIGINT
 | `logging` | `message()` on stderr, filtered by the `pubsubr.log_level` option |
 | 64-bit integer ids | strings of decimal digits, since ids use up to 63 bits and doubles are exact only up to 2^53 |
 | 64-bit integer timestamps | doubles, exact up to 2^53 (current microsecond timestamps are around 2^51) |
-| SIGTERM and SIGINT handled by `subscribe()` | SIGINT as an R `interrupt` condition; SIGTERM only with the optional sigterm package |
+| SIGTERM and SIGINT handled by `subscribe()` | SIGINT as an R `interrupt` condition; SIGTERM with an embedded C handler |
 | threads / `multiprocessing` in tests | forked processes with `parallel::mcparallel` |
 
 ## Development
