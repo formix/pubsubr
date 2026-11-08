@@ -125,7 +125,6 @@ close.Channel <- function(con, ...) {
     return(invisible(con))
   }
 
-  on.exit(.delete_recursive(con$directory_path))
   tryCatch(
     {
       close(state$connection)
@@ -136,7 +135,9 @@ close.Channel <- function(con, ...) {
         "Failed to close channel file descriptor %s: %s",
         con$directory_name, conditionMessage(e)
       ), parent = e)
-    }
+    },
+    # The channel directory is removed right here, even if closing failed
+    finally = .delete_recursive(con$directory_path)
   )
   invisible(con)
 }
