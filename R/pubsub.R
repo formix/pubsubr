@@ -58,6 +58,27 @@
   p > np # topic fully consumed: the pattern must be as well
 }
 
+# Validate the topic of a published message.
+#
+# Valid characters: [a-zA-Z0-9.-]. Unlike the topic pattern of a channel (see
+# .validate_topic_pattern()), no wildcard is allowed, and no dot-separated word
+# can be empty or blank.
+.validate_topic <- function(topic) {
+  if (is.character(topic) && length(topic) == 1L && !is.na(topic) &&
+      .has_blank_word(topic)) {
+    .raise("value_error", .blank_words_message(topic))
+  }
+  if (!is.character(topic) || length(topic) != 1L || is.na(topic) ||
+      !grepl("^[a-zA-Z0-9.-]+$", topic, perl = TRUE)) {
+    .raise("value_error", sprintf(
+      paste0("Topic '%s' can only contain alphanumeric characters, dots, and hyphens ",
+             "[a-zA-Z0-9.-] when publishing"),
+      paste(topic, collapse = " ")
+    ))
+  }
+  invisible(NULL)
+}
+
 #' Publish a message to a topic
 #'
 #' The message is delivered to every active channel whose topic matches `topic`
@@ -90,20 +111,7 @@
 #' if (is.na(old)) Sys.unsetenv("PUBSUB_HOME") else Sys.setenv(PUBSUB_HOME = old)
 #' @export
 publish <- function(topic, data, headers = NULL) {
-  if (is.character(topic) && length(topic) == 1L && !is.na(topic) &&
-      .has_blank_word(topic)) {
-    .raise("value_error", .blank_words_message(topic))
-  }
-
-  # Validate that topic contains only allowed characters (no wildcards)
-  if (!is.character(topic) || length(topic) != 1L || is.na(topic) ||
-      !grepl("^[a-zA-Z0-9.-]+$", topic, perl = TRUE)) {
-    .raise("value_error", sprintf(
-      paste0("Topic '%s' can only contain alphanumeric characters, dots, and hyphens ",
-             "[a-zA-Z0-9.-] when publishing"),
-      paste(topic, collapse = " ")
-    ))
-  }
+  .validate_topic(topic)
 
   message <- Message(topic = topic, content = data, headers = headers)
   tmp_dir <- file.path(get_base_dir(), "tmp")
@@ -142,6 +150,8 @@ publish <- function(topic, data, headers = NULL) {
     }
     message_file_path <- file.path(channel_dir, message$id)
     if (!suppressWarnings(file.link(message_temp_file, message_file_path))) {
+      # If the link fails, it may be because the message id already exists in the
+      # channel directory. This is a collision, which is a runtime error.
       if (file.exists(message_file_path)) {
         .raise("runtime_error", sprintf(
           paste0("Message id collision: message %s already exists in %s. The ",
