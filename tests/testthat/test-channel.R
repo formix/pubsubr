@@ -60,6 +60,49 @@ test_that("closing removes the channel directory only when it is open", {
   expect_null(.delete_recursive(channel$directory_path)) # nothing left to delete
 })
 
+test_that("closing a channel in a called function closes it in the caller", {
+  channel <- Channel("test.close.scope")
+  open(channel)
+  expect_true(.channel_is_open(channel))
+
+  # The function gets a copy of the list; closing it must close the caller's
+  # object too, since both share the same state environment.
+  close_elsewhere <- function(ch) {
+    close(ch)
+    invisible(NULL)
+  }
+  close_elsewhere(channel)
+
+  expect_false(.channel_is_open(channel))
+  expect_null(.channel_connection(channel))
+  expect_null(channel$state$connection)
+  expect_false(dir.exists(channel$directory_path))
+  expect_error(fetch(channel), class = "runtime_error")
+  expect_error(subscribe(channel, function(message) NULL, timeout_seconds = 0.1),
+               class = "runtime_error")
+
+  # The other way round: closing the caller's object closes a copy stored
+  # elsewhere, here in a list.
+  channel <- Channel("test.close.scope")
+  holder <- list(channel = channel)
+  open(holder$channel)
+  expect_true(.channel_is_open(channel))
+  close(channel)
+  expect_false(.channel_is_open(holder$channel))
+})
+
+test_that("with_channel leaves the caller's channel closed, even after an error", {
+  channel <- Channel("test.close.with")
+  with_channel(channel, function(ch) expect_true(.channel_is_open(ch)))
+  expect_false(.channel_is_open(channel))
+  expect_error(fetch(channel), class = "runtime_error")
+
+  channel <- Channel("test.close.with")
+  expect_error(with_channel(channel, stop("inside")), "inside")
+  expect_false(.channel_is_open(channel))
+  expect_false(dir.exists(channel$directory_path))
+})
+
 test_that("a failure to close the fifo is reported", {
   channel <- Channel("test.closefail")
   open(channel)
