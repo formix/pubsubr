@@ -55,7 +55,10 @@ fi
 echo -e "${BLUE}Package: ${GREEN}$PACKAGE${NC}"
 echo -e "${BLUE}Version: ${GREEN}$VERSION${NC}\n"
 
-# Check for uncommitted changes
+# Check for uncommitted changes. diff-index does not refresh the index, so files
+# rewritten with identical content by a previous run (roxygen2, R CMD build)
+# would look modified because of their new mtime. Refresh it first.
+git update-index -q --refresh
 if ! git diff-index --quiet HEAD --; then
     echo -e "${RED}Error: You have uncommitted changes in your working directory.${NC}"
     echo "Please commit or stash your changes before deploying."
@@ -151,8 +154,7 @@ Rscript -e 'devtools::document()' || {
     echo -e "${RED}✗ Documentation build failed${NC}"
     exit 1
 }
-if [ "$DRY_RUN" -eq 0 ] && ! git diff --quiet -- man NAMESPACE DESCRIPTION; then
-    echo -e "${RED}✗ The generated documentation differs from the committed one.${NC}"
+if [ "$DRY_RUN" -eq 0 ] && ! git diff --quiet -- man NAMESPACE DESCRIPTION; then    echo -e "${RED}✗ The generated documentation differs from the committed one.${NC}"
     echo "Review and commit the changes, then run the deployment again:"
     git status --short -- man NAMESPACE DESCRIPTION
     exit 1
