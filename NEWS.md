@@ -1,3 +1,9 @@
+# pubsubr 1.0.3
+
+* Fix the invalid file URI reported by CRAN: the README now links to
+  `LICENSE.md` with an absolute URL, since that file is not part of the
+  package tarball.
+
 # pubsubr 1.0.2
 
 * First CRAN release. The version is 1.0.2 and not 1.0.0 because pubsubr is

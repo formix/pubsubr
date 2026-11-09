@@ -1,7 +1,7 @@
 Package: pubsubr
 Type: Package
 Title: Serverless Publish-Subscribe Interprocess Messaging
-Version: 1.0.2
+Version: 1.0.3
 Authors@R: c(
     person("Jean-Philippe", "Gravel", email = "jeanphilippe.gravel@gmail.com",
            role = c("aut", "cre")),

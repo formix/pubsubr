@@ -1,6 +1,6 @@
 # pubsubr
 
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE.md)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/formix/pubsubr/blob/main/LICENSE.md)
 
 A serverless publish-subscribe library for R interprocess communication.
 
@@ -269,4 +269,4 @@ Rscript -e 'testthat::test_local()'
 
 ## License
 
-[MIT](LICENSE.md)
+[MIT](https://github.com/formix/pubsubr/blob/main/LICENSE.md)

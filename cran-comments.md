@@ -1,8 +1,9 @@
-## Submission
+## Resubmission
 
-This is a new submission. The version number (1.0.2) is deliberately kept in
-sync with the Python library 'formix-pubsub', of which pubsubr is a
-translation using the same on-disk and wire formats.
+This is a resubmission of pubsubr 1.0.3. CRAN reported an invalid file URI
+(`LICENSE.md` linked from `README.md`). The README now uses an absolute URL to
+`LICENSE.md` on GitHub, since that file is excluded from the package tarball.
+The version was bumped from 1.0.2 to 1.0.3 for the resubmission.
 
 ## Test environments
 
