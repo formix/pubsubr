@@ -20,6 +20,15 @@ Unlike traditional pub/sub systems (Redis, RabbitMQ, ZeroMQ), **pubsubr requires
 
 ## Installation
 
+From CRAN:
+
+```r
+install.packages("pubsubr")
+```
+
+Development version from GitHub (gets new features and fixes before they reach
+CRAN):
+
 ```r
 # install.packages("remotes")
 remotes::install_github("formix/pubsubr")
